@@ -27,5 +27,6 @@ export const ALLOWED_EMAILS = [
   "diogohenrique1334@gmail.com",
   "vitorsds6@gmail.com",
   "juniorpereirasilas@gmail.com",
-  "naty16br@gmail.com"
+  "naty16br@gmail.com",
+  "vinipp7365@gmail.com"
 ];
