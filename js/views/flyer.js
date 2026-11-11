@@ -8,17 +8,24 @@ import { notasDoAtletaNoJogo, resultadoJogo, GOL_CONTRA_ID } from "../stats.js";
 // cadastro do adversário pra ser reaproveitado nos próximos jogos.
 
 const DOURADO = "#E4B62B";
+// Fundos disponíveis (preto e amarelo): cores usadas em todo o flyer.
+const TEMAS = {
+  noite: { nome: "Preto clássico", bg: "linear-gradient(180deg,#0d0d0d 0%,#1d1d1d 100%)", fg: "#ffffff", accent: DOURADO, muted: "#a9a9a9", muted2: "#cfcfcf", faint: "#5f5f5f", border: "none", ring: "transparent" },
+  listras: { nome: "Preto com listras e moldura", bg: "repeating-linear-gradient(135deg,#0e0e0e 0,#0e0e0e 70px,#191919 70px,#191919 140px)", fg: "#ffffff", accent: DOURADO, muted: "#b5b5b5", muted2: "#d8d8d8", faint: "#6a6a6a", border: `16px solid ${DOURADO}`, ring: "transparent" },
+  ouro: { nome: "Amarelo", bg: "linear-gradient(180deg,#F0C53A 0%,#D9A614 100%)", fg: "#111111", accent: "#111111", muted: "#3b3210", muted2: "#2a2308", faint: "#6b5a1a", border: "none", ring: "#111111" },
+};
+
 const ESCUDO_MAX = 192; // px — pequeno de propósito (vai dentro do documento do adversário)
 
 function iniciais(nome){
   return (nome || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join("");
 }
 
-function escudoHtml(src, nome, tam){
+function escudoHtml(src, nome, tam, cor = DOURADO){
   if (src){
     return `<img src="${src}" style="width:${tam}px; height:${tam}px; object-fit:contain;">`;
   }
-  return `<div style="width:${tam}px; height:${tam}px; border-radius:50%; border:6px solid ${DOURADO}; display:flex; align-items:center; justify-content:center; font-family:'Bebas Neue',sans-serif; font-size:${Math.round(tam * 0.4)}px; color:${DOURADO};">${escapeHtml(iniciais(nome))}</div>`;
+  return `<div style="width:${tam}px; height:${tam}px; border-radius:50%; border:6px solid ${cor}; display:flex; align-items:center; justify-content:center; font-family:'Bebas Neue',sans-serif; font-size:${Math.round(tam * 0.4)}px; color:${cor};">${escapeHtml(iniciais(nome))}</div>`;
 }
 
 // Reduz a imagem escolhida pra no máximo ESCUDO_MAX px (mantém proporção e
@@ -70,20 +77,22 @@ function resumoJogo(jogo, atletas){
   return { gols, artilheiro: conta("atletaGolId"), garcom: conta("atletaAssistId"), melhorNota };
 }
 
-function flyerHtml({ modelo, formato, jogo, adv, campo, escudo, resumo }){
+function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo }){
+  const T = TEMAS[tema] || TEMAS.noite;
+  const DOURADO = T.accent;
   const W = 1080;
   const H = formato === "story" ? 1920 : 1350;
-  const base = `width:${W}px; height:${H}px; box-sizing:border-box; padding:80px 70px; background:linear-gradient(180deg,#0d0d0d 0%,#1d1d1d 100%); color:#fff; font-family:'Inter',system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:space-between; position:relative; overflow:hidden;`;
+  const base = `width:${W}px; height:${H}px; box-sizing:border-box; padding:80px 70px; background:${T.bg}; color:${T.fg}; border:${T.border}; font-family:'Inter',system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:space-between; position:relative; overflow:hidden;`;
   const topo = `
     <div style="display:flex; align-items:center; gap:22px;">
-      <img src="assets/logo-bomdcopus.png" style="width:96px; height:96px; border-radius:50%; object-fit:cover;">
+      <img src="assets/logo-bomdcopus.png" style="width:96px; height:96px; border-radius:50%; object-fit:cover; box-shadow:0 0 0 4px ${T.ring};">
       <div style="font-family:'Bebas Neue',sans-serif; font-size:72px; letter-spacing:.04em; line-height:1;">BOM D' COPUS</div>
     </div>`;
   const tipo = jogo.tipoPartida ? `<div style="font-family:'Bebas Neue',sans-serif; font-size:50px; letter-spacing:.2em; color:${DOURADO};">${escapeHtml(String(jogo.tipoPartida).toUpperCase())}</div>` : "<div></div>";
   const data = formatDateLong(jogo.data);
-  const rodape = `<div style="font-size:26px; color:#8a8a8a; letter-spacing:.12em;">BOM D' COPUS · GESTÃO DO TIME</div>`;
+  const rodape = `<div style="font-size:20px; color:${T.faint}; letter-spacing:.06em;">Imagem gerada pelo app Bom D' Copus</div>`;
   const faixa = `<div style="width:220px; height:6px; background:${DOURADO}; border-radius:3px;"></div>`;
-  const bdc = `<img src="assets/logo-bomdcopus.png" style="width:__T__px; height:__T__px; border-radius:50%; object-fit:cover;">`;
+  const bdc = `<img src="assets/logo-bomdcopus.png" style="width:__T__px; height:__T__px; border-radius:50%; object-fit:cover; box-shadow:0 0 0 8px ${T.ring};">`;
 
   if (modelo === "convite"){
     const t = 330;
@@ -93,7 +102,7 @@ function flyerHtml({ modelo, formato, jogo, adv, campo, escudo, resumo }){
       <div style="display:flex; align-items:center; justify-content:center; gap:40px;">
         ${bdc.replace(/__T__/g, t)}
         <div style="font-family:'Bebas Neue',sans-serif; font-size:130px; color:${DOURADO}; line-height:1;">VS</div>
-        ${escudoHtml(escudo, adv?.nome, t)}
+        ${escudoHtml(escudo, adv?.nome, t, T.accent)}
       </div>
       <div style="text-align:center;">
         <div style="font-family:'Bebas Neue',sans-serif; font-size:104px; line-height:1.05; letter-spacing:.02em;">${escapeHtml((adv?.nome || "Adversário").toUpperCase())}</div>
@@ -102,7 +111,7 @@ function flyerHtml({ modelo, formato, jogo, adv, campo, escudo, resumo }){
       <div style="text-align:center; font-size:46px; line-height:1.5;">
         <div style="font-weight:700; text-transform:uppercase;">${escapeHtml(data)}</div>
         ${jogo.horario ? `<div style="color:${DOURADO}; font-weight:700;">${escapeHtml(jogo.horario)}</div>` : ""}
-        ${campo ? `<div style="color:#d6d6d6; font-size:40px;">${escapeHtml(campo.nome)}</div>` : ""}
+        ${campo ? `<div style="color:${T.muted2}; font-size:40px;">${escapeHtml(campo.nome)}</div>` : ""}
       </div>
       ${rodape}
     </div>`;
@@ -115,8 +124,8 @@ function flyerHtml({ modelo, formato, jogo, adv, campo, escudo, resumo }){
   const rotulo = res === "vitoria" ? "VITÓRIA" : res === "derrota" ? "DERROTA" : res === "empate" ? "EMPATE" : "";
   const maxGols = formato === "story" ? 14 : 8;
   const gols = resumo.gols.slice(0, maxGols).map(g =>
-    `<div style="font-size:40px; line-height:1.35;">⚽ <strong>${escapeHtml(g.gol)}</strong>${g.assist ? ` <span style="color:#a9a9a9; font-size:34px;">(assist. ${escapeHtml(g.assist)})</span>` : ""}</div>`).join("");
-  const extra = resumo.gols.length > maxGols ? `<div style="font-size:30px; color:#a9a9a9;">+ ${resumo.gols.length - maxGols} gols</div>` : "";
+    `<div style="font-size:32px; line-height:1.35;">⚽ <strong>${escapeHtml(g.gol)}</strong>${g.assist ? ` <span style="color:${T.muted}; font-size:27px;">(assist. ${escapeHtml(g.assist)})</span>` : ""}</div>`).join("");
+  const extra = resumo.gols.length > maxGols ? `<div style="font-size:26px; color:${T.muted};">+ ${resumo.gols.length - maxGols} gols</div>` : "";
   const dest = [];
   if (resumo.artilheiro) dest.push(["ARTILHEIRO", `${resumo.artilheiro.nomes.join(", ")}${resumo.artilheiro.max > 1 ? ` (${resumo.artilheiro.max})` : ""}`]);
   if (resumo.garcom) dest.push(["GARÇOM", `${resumo.garcom.nomes.join(", ")}${resumo.garcom.max > 1 ? ` (${resumo.garcom.max})` : ""}`]);
@@ -134,11 +143,11 @@ function flyerHtml({ modelo, formato, jogo, adv, campo, escudo, resumo }){
     <div style="display:flex; align-items:center; justify-content:center; gap:30px;">
       ${bdc.replace(/__T__/g, t)}
       <div style="font-family:'Bebas Neue',sans-serif; font-size:230px; line-height:1; letter-spacing:.02em;">${escapeHtml(placar)}</div>
-      ${escudoHtml(escudo, adv?.nome, t)}
+      ${escudoHtml(escudo, adv?.nome, t, T.accent)}
     </div>
     <div style="text-align:center;">
       <div style="font-family:'Bebas Neue',sans-serif; font-size:64px; line-height:1.1;">BOM D' COPUS x ${escapeHtml((adv?.nome || "Adversário").toUpperCase())}</div>
-      <div style="font-size:32px; color:#cfcfcf; margin-top:10px;">${escapeHtml(data)}${campo ? ` · ${escapeHtml(campo.nome)}` : ""}</div>
+      <div style="font-size:32px; color:${T.muted2}; margin-top:10px;">${escapeHtml(data)}${campo ? ` · ${escapeHtml(campo.nome)}` : ""}</div>
     </div>
     ${gols ? `<div style="width:100%; text-align:left; padding:0 40px; box-sizing:border-box;">
       <div style="font-family:'Bebas Neue',sans-serif; font-size:44px; letter-spacing:.14em; color:${DOURADO}; margin-bottom:6px;">GOLS</div>
@@ -156,6 +165,7 @@ export function openFlyerModal(state, jogo){
   let escudo = adv?.escudo || "";
   let modelo = jogo.status === "realizado" && jogo.placarNos !== null && jogo.placarNos !== undefined ? "resultado" : "convite";
   let formato = "feed";
+  let tema = "noite";
 
   openModal(`
     <div class="modal-head">
@@ -169,6 +179,8 @@ export function openFlyerModal(state, jogo){
             <option value="convite">Convite (antes do jogo)</option>
             <option value="resultado">Resultado (depois do jogo)</option>
           </select></div>
+        <div class="field"><label>Fundo</label>
+          <select id="fl-tema">${Object.entries(TEMAS).map(([k, t]) => `<option value="${k}">${t.nome}</option>`).join("")}</select></div>
         <div class="field"><label>Formato</label>
           <select id="fl-formato">
             <option value="feed">Feed (4:5)</option>
@@ -194,7 +206,7 @@ export function openFlyerModal(state, jogo){
   $$("[data-close]").forEach(b => b.addEventListener("click", closeModal));
   $("#fl-modelo").value = modelo;
 
-  const montar = () => flyerHtml({ modelo, formato, jogo, adv, campo, escudo, resumo });
+  const montar = () => flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo });
 
   const desenhar = () => {
     $("#fl-escudo-label").textContent = escudo ? "Trocar escudo do adversário" : "Adicionar escudo do adversário";
@@ -208,6 +220,7 @@ export function openFlyerModal(state, jogo){
   desenhar();
 
   $("#fl-modelo").addEventListener("change", (e) => { modelo = e.target.value; desenhar(); });
+  $("#fl-tema").addEventListener("change", (e) => { tema = e.target.value; desenhar(); });
   $("#fl-formato").addEventListener("change", (e) => { formato = e.target.value; desenhar(); });
 
   $("#fl-escudo").addEventListener("change", async (e) => {
@@ -234,7 +247,7 @@ export function openFlyerModal(state, jogo){
     box.innerHTML = montar();
     document.body.appendChild(box);
     try{
-      const canvas = await html2canvas(box.firstElementChild, { backgroundColor: "#111111", scale: 1, useCORS: true, windowWidth: 1200 });
+      const canvas = await html2canvas(box.firstElementChild, { backgroundColor: null, scale: 1, useCORS: true, windowWidth: 1200 });
       return await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error("Falha ao gerar a imagem.")), "image/png"));
     } finally {
       box.remove();
