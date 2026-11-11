@@ -13,6 +13,8 @@ import { renderFinanceiro } from "./views/financeiro.js";
 import { renderRelatoriosHub } from "./views/relatorios.js";
 import { renderExtrato } from "./views/extrato.js";
 import { renderPresenca } from "./views/presenca.js";
+import { renderRetrospecto } from "./views/retrospecto.js";
+import { renderPremiacoes } from "./views/premiacoes.js";
 
 const state = {
   adversarios: [], campos: [], atletas: [], jogos: [], financeiro: [], configFinanceiro: null,
@@ -49,6 +51,8 @@ const ROUTES = {
   cadastros: renderCadastrosHub,
   financeiro: renderFinanceiro,
   relatorios: renderRelatoriosHub,
+  retrospecto: renderRetrospecto,
+  premiacoes: renderPremiacoes,
 };
 
 const PROTECTED_ROUTES = new Set(["jogos", "atletas", "adversarios", "campos", "avaliacao", "cadastros", "financeiro"]);
@@ -153,7 +157,7 @@ function render(){
   // dessas subtelas, não só na tela do hub em si.
   const CADASTROS_SUBROTAS = new Set(["atletas", "adversarios", "campos", "jogos"]);
   // Mesma ideia pro hub "Relatórios" (Ranking, Escalação ideal, Histórico, Extrato).
-  const RELATORIOS_SUBROTAS = new Set(["ranking", "escalacao-ideal", "historico", "extrato"]);
+  const RELATORIOS_SUBROTAS = new Set(["ranking", "escalacao-ideal", "historico", "extrato", "retrospecto", "premiacoes"]);
   const routeAtiva = CADASTROS_SUBROTAS.has(route) ? "cadastros"
     : RELATORIOS_SUBROTAS.has(route) ? "relatorios" : route;
   $$(".nav-link[data-route]").forEach(a => a.classList.toggle("active", a.dataset.route === routeAtiva));

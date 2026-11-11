@@ -7,9 +7,9 @@ import { notasDoAtletaNoJogo, resultadoJogo, GOL_CONTRA_ID, posicaoJogadaNoJogo,
 // uma vez (da galeria do celular), reduzido no navegador e guardado no
 // cadastro do adversário pra ser reaproveitado nos próximos jogos.
 
-const DOURADO = "#E4B62B";
+export const DOURADO = "#E4B62B";
 // Fundos disponíveis (preto e amarelo): cores usadas em todo o flyer.
-const TEMAS = {
+export const TEMAS = {
   noite: { nome: "Preto clássico", bg: "linear-gradient(180deg,#0d0d0d 0%,#1d1d1d 100%)", fg: "#ffffff", accent: DOURADO, muted: "#a9a9a9", muted2: "#cfcfcf", faint: "#5f5f5f", border: "none", ring: "transparent" },
   listras: { nome: "Preto com listras e moldura", bg: "repeating-linear-gradient(135deg,#0e0e0e 0,#0e0e0e 70px,#191919 70px,#191919 140px)", fg: "#ffffff", accent: DOURADO, muted: "#b5b5b5", muted2: "#d8d8d8", faint: "#6a6a6a", border: `16px solid ${DOURADO}`, ring: "transparent" },
   arte: { nome: "Preto com moldura (estilo do time)", bg: "#000000", fg: "#ffffff", accent: DOURADO, muted: "#b5b5b5", muted2: "#d8d8d8", faint: "#6a6a6a", border: "none", ring: "transparent", decor: true },
@@ -17,7 +17,7 @@ const TEMAS = {
 
 const ESCUDO_MAX = 192; // px — pequeno de propósito (vai dentro do documento do adversário)
 
-function iniciais(nome){
+export function iniciais(nome){
   return (nome || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join("");
 }
 
@@ -50,7 +50,7 @@ function reduzirImagem(file){
 }
 
 // Foto do jogador (não é salva): reduz para no máximo 1000 px e comprime.
-function reduzirFoto(file){
+export function reduzirFoto(file){
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -443,6 +443,138 @@ export function openFlyerModal(state, jogo){
         a.href = url; a.download = nomeArquivo();
         document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(url);
+        toast("Seu navegador não abre o compartilhar; a imagem foi baixada.", "ok");
+      }
+    }catch(err){ console.error(err); toast("Erro ao compartilhar: " + err.message, "err"); }
+    btn.disabled = false;
+  });
+}
+
+
+// ============================================================================
+// Modal genérico de imagem (usado por Premiações e Destaque do mês): fundo,
+// formato, foto opcional, seleção opcional de jogador, legenda e compartilhar.
+// ============================================================================
+
+// Peças comuns do flyer (moldura, topo, rodapé, riscos dos cantos) pra quem
+// monta um layout próprio.
+export function estruturaFlyer(tema, formato){
+  const T = TEMAS[tema] || TEMAS.noite;
+  const A = T.accent;
+  const W = 1080;
+  const H = formato === "story" ? 1920 : 1350;
+  const base = `width:${W}px; height:${H}px; box-sizing:border-box; padding:80px 70px; background:${T.bg}; color:${T.fg}; border:${T.border}; font-family:'Inter',system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:space-between; position:relative; overflow:hidden;`;
+  const risco = (css) => `<div style="position:absolute; height:6px; background:${A}; ${css}"></div>`;
+  const cantos = T.decor ? [
+    risco("left:-60px; top:140px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),
+    risco("left:-60px; top:215px; width:380px; transform:rotate(-45deg); transform-origin:left center;"),
+    risco("left:-60px; top:290px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),
+    risco("right:-60px; bottom:140px; width:260px; transform:rotate(-45deg); transform-origin:right center;"),
+    risco("right:-60px; bottom:215px; width:380px; transform:rotate(-45deg); transform-origin:right center;"),
+    risco("right:-60px; bottom:290px; width:260px; transform:rotate(-45deg); transform-origin:right center;"),
+  ].join("") : "";
+  const topo = `
+    <div style="display:flex; align-items:center; gap:22px;">
+      <img src="assets/logo-bomdcopus.png" style="width:96px; height:96px; border-radius:50%; object-fit:cover; box-shadow:0 0 0 4px ${T.ring};">
+      <div style="font-family:'Bebas Neue',sans-serif; font-size:72px; letter-spacing:.04em; line-height:1;">BOM D' COPUS</div>
+    </div>`;
+  const rodape = `<div style="font-size:20px; color:${T.faint}; letter-spacing:.06em;">Imagem gerada pelo app Bom D' Copus</div>`;
+  return { T, A, W, H, base, cantos, topo, rodape };
+}
+
+export function openImagemModal({ titulo, render, legenda, comFoto = false, selecao = null, arquivo = "imagem" }){
+  let tema = "noite", formato = "feed", foto = "";
+  let selId = selecao?.padrao || "";
+
+  openModal(`
+    <div class="modal-head">
+      <h3>${escapeHtml(titulo)}</h3>
+      <button class="modal-close" data-close>&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="margin-bottom:12px;">
+        <div class="field"><label>Fundo</label>
+          <select id="gm-tema">${Object.entries(TEMAS).map(([k, t]) => `<option value="${k}">${t.nome}</option>`).join("")}</select></div>
+        <div class="field"><label>Formato</label>
+          <select id="gm-formato"><option value="feed">Feed (4:5)</option><option value="story">Story (9:16)</option></select></div>
+        ${selecao ? `<div class="field"><label>${escapeHtml(selecao.label)}</label>
+          <select id="gm-sel">${selecao.opcoes.map(o => `<option value="${escapeHtml(o.value)}" ${o.value === selId ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}</select></div>` : ""}
+        ${comFoto ? `<div class="field"><label>Foto do jogador (não é salva)</label><input type="file" id="gm-foto" accept="image/*"></div>` : ""}
+      </div>
+      <div id="gm-prev-wrap" style="width:100%; max-width:420px; margin:0 auto; overflow:hidden; border-radius:10px; background:#111;"><div id="gm-prev" style="transform-origin:top left;"></div></div>
+      <div class="form-actions" style="margin-top:14px;">
+        <button type="button" class="btn btn-ghost" data-close>Fechar</button>
+        <button type="button" class="btn btn-ghost" id="gm-legenda">Copiar legenda</button>
+        <button type="button" class="btn btn-ghost" id="gm-baixar">Baixar</button>
+        <button type="button" class="btn btn-primary" id="gm-compartilhar">Compartilhar</button>
+      </div>
+    </div>
+  `, { wide: true });
+  $$("[data-close]").forEach(b => b.addEventListener("click", closeModal));
+
+  const montar = () => render({ ...estruturaFlyer(tema, formato), tema, formato, foto, selecaoId: selId });
+  const desenhar = () => {
+    const prev = $("#gm-prev");
+    prev.innerHTML = montar();
+    const wrap = $("#gm-prev-wrap");
+    const k = wrap.clientWidth / 1080;
+    prev.style.transform = `scale(${k})`;
+    wrap.style.height = `${(formato === "story" ? 1920 : 1350) * k}px`;
+  };
+  desenhar();
+
+  $("#gm-tema").addEventListener("change", (e) => { tema = e.target.value; desenhar(); });
+  $("#gm-formato").addEventListener("change", (e) => { formato = e.target.value; desenhar(); });
+  $("#gm-sel")?.addEventListener("change", (e) => { selId = e.target.value; foto = ""; const f = $("#gm-foto"); if (f) f.value = ""; desenhar(); });
+  $("#gm-foto")?.addEventListener("change", async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try{ foto = await reduzirFoto(f); desenhar(); }
+    catch(err){ console.error(err); toast("Não foi possível usar essa foto.", "err"); }
+  });
+
+  const gerarBlob = async () => {
+    if (typeof html2canvas !== "function") throw new Error("Recurso de imagem indisponível.");
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed; left:-12000px; top:0;";
+    box.innerHTML = montar();
+    document.body.appendChild(box);
+    try{
+      const canvas = await html2canvas(box.firstElementChild, { backgroundColor: null, scale: 1, useCORS: true, windowWidth: 1200 });
+      return await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error("Falha ao gerar a imagem.")), "image/png"));
+    } finally {
+      box.remove();
+    }
+  };
+  const nomeArquivo = () => `${arquivo}.png`;
+  const baixar = (blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = nomeArquivo();
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  $("#gm-legenda").addEventListener("click", async () => {
+    try{ await navigator.clipboard.writeText(typeof legenda === "function" ? legenda(selId) : legenda); toast("Legenda copiada.", "ok"); }
+    catch(err){ toast("Não foi possível copiar a legenda.", "err"); }
+  });
+  $("#gm-baixar").addEventListener("click", async (e) => {
+    const btn = e.currentTarget; btn.disabled = true;
+    try{ baixar(await gerarBlob()); toast("Imagem salva!", "ok"); }
+    catch(err){ console.error(err); toast("Erro ao gerar a imagem: " + err.message, "err"); }
+    btn.disabled = false;
+  });
+  $("#gm-compartilhar").addEventListener("click", async (e) => {
+    const btn = e.currentTarget; btn.disabled = true;
+    try{
+      const blob = await gerarBlob();
+      const file = new File([blob], nomeArquivo(), { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })){
+        try{ await navigator.share({ files: [file], title: "Bom D' Copus" }); }
+        catch(err){ if (err?.name !== "AbortError") throw err; }
+      } else {
+        baixar(blob);
         toast("Seu navegador não abre o compartilhar; a imagem foi baixada.", "ok");
       }
     }catch(err){ console.error(err); toast("Erro ao compartilhar: " + err.message, "err"); }

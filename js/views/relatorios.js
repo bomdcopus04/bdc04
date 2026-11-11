@@ -1,5 +1,5 @@
 // Hub "Relatórios" — agrupa as telas de consulta (Ranking, Escalação ideal,
-// Histórico e Extrato do jogador) num item só do menu, no mesmo molde do hub
+// Histórico, Extrato, Retrospecto e Premiações) num item só do menu, no mesmo molde do hub
 // de Cadastros. O Dashboard continua separado por ser a tela inicial.
 export function renderRelatoriosHub(root, state){
   const itens = [
@@ -10,6 +10,14 @@ export function renderRelatoriosHub(root, state){
     {
       route: "extrato", label: "Extrato do jogador", desc: "Jogos, gols, assistências e notas de cada atleta",
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6"/></svg>`,
+    },
+    {
+      route: "retrospecto", label: "Retrospecto", desc: "Campanha contra cada adversário e em cada campo",
+      icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>`,
+    },
+    {
+      route: "premiacoes", label: "Premiações", desc: "Temporada e destaque do mês, com imagem pra compartilhar",
+      icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="9" r="6"/><path d="M8.5 14L7 22l5-3 5 3-1.5-8"/></svg>`,
     },
     {
       route: "escalacao-ideal", label: "Escalação ideal", desc: "Melhor time por formação",
