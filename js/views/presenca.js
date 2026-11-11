@@ -144,8 +144,12 @@ function desenhar(root, state, jogoId){
     "Convite copiado."));
   $("#btn-copiar-pendentes", root)?.addEventListener("click", () => {
     const pend = jogadores.filter(a => !respostaDe.has(a.id)).map(a => `• ${a.nome}`);
+    const dados = [`🆚 Bom D' Copus x ${adv}`, `📅 ${formatDateLong(jogo.data)}`];
+    if (jogo.horario) dados.push(`⏰ ${jogo.horario}`);
+    if (campo) dados.push(`📍 ${campo}`);
+    if (jogo.tipoPartida) dados.push(`🏷️ ${jogo.tipoPartida}`);
     copiar(pend.length
-      ? `⚽ Falta confirmar presença (Bom D' Copus vs ${adv}):\n${pend.join("\n")}\n\n${linkPresenca(jogoId)}`
-      : "Todo mundo já respondeu!", "Lista copiada.");
+      ? `⏳ Falta confirmar presença!\n\n${dados.join("\n")}\n\nAinda não responderam:\n${pend.join("\n")}\n\n👉 Confirme pelo link:\n${linkPresenca(jogoId)}`
+      : "Todo mundo já respondeu! ✅", "Lista copiada.");
   });
 }
