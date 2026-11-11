@@ -50,6 +50,10 @@ export const POSICAO_ABREV = {
 export const abrevPosicao = (pos) => POSICAO_ABREV[pos] || pos;
 
 let formacaoAtual = "4-3-3";
+// Critério da escalação: "jogada" = nota na posição em que o atleta foi escalado
+// nas partidas (com a posição cadastrada como 2º critério); "cadastro" = só a
+// posição cadastrada no elenco, com a nota média geral do atleta.
+let criterio = "jogada";
 let filtroAno = "";
 let filtroMes = "";
 const excluidos = new Set();
@@ -180,7 +184,7 @@ export function renderEscalacaoIdeal(root, state){
   // 1ª regra: nota na posição em que o jogador foi escalado nos jogos. Todos
   // os pares (vaga, jogador) com nota nessa posição, do melhor para o pior.
   const pares = [];
-  vagas.forEach((v, vi) => atletasConsiderados.forEach(a => {
+  if (criterio === "jogada") vagas.forEach((v, vi) => atletasConsiderados.forEach(a => {
     const porPosicao = notasPos[a.id];
     if (!porPosicao) return;
     let melhor = null;
@@ -215,7 +219,9 @@ export function renderEscalacaoIdeal(root, state){
     const n = linha.slots.length;
     if (linha.ordenar){
       const ids = atribuido.slice(inicio, inicio + n);
-      const rotulo = (id) => id ? melhorParaLinha(id, { positions: linha.slots[0] }, notasPos, atletasConsiderados, jogosFiltrados).posicaoJogada : "";
+      const rotulo = (id) => id ? criterio === "cadastro"
+        ? (atletasConsiderados.find(a => a.id === id)?.posicao || "")
+        : melhorParaLinha(id, { positions: linha.slots[0] }, notasPos, atletasConsiderados, jogosFiltrados).posicaoJogada : "";
       const meias = ids.filter(id => rotulo(id) === "Meia");
       const outros = ids.filter(id => id && rotulo(id) !== "Meia");
       const vazios = ids.filter(id => !id);
@@ -243,7 +249,9 @@ export function renderEscalacaoIdeal(root, state){
         const selecionada = selecionadoIdx === slotIdx;
         if (atletaId){
           const atleta = atletasConsiderados.find(a => a.id === atletaId) || atletasElenco.find(a => a.id === atletaId);
-          const info = melhorParaLinha(atletaId, { positions: linha.slots[i] }, notasPos, atletasConsiderados, jogosFiltrados);
+          const info = criterio === "cadastro"
+            ? { posicaoJogada: atleta?.posicao || "—", media: geral[atletaId] ?? null }
+            : melhorParaLinha(atletaId, { positions: linha.slots[i] }, notasPos, atletasConsiderados, jogosFiltrados);
           cards.push(`
             <div class="pitch-player${selecionada ? " selecionado" : ""}" data-slot-idx="${slotIdx}" title="Toque pra trocar de posição">
               <div class="dot">${atleta?.numero ?? "•"}</div>
@@ -287,10 +295,13 @@ export function renderEscalacaoIdeal(root, state){
       </button>
     </div>
     <p style="font-size:13px; color:var(--ink-soft); margin:-14px 0 20px; max-width:640px;">
-      Calculada pela nota média de cada atleta na posição em que ele foi escalado nas partidas (não a posição
+      ${criterio === "jogada"
+        ? `Calculada pela nota média de cada atleta na posição em que ele foi escalado nas partidas (não a posição
       cadastrada). Cada vaga usa primeiro quem tem nota jogando naquela posição; se sobrar vaga, usa a posição
-      cadastrada no elenco; e, por último, preenche com quem restar — só fica vaga em aberto se você
-      selecionar menos de 11 jogadores. Laterais ficam nas pontas da defesa e zagueiros no centro.
+      cadastrada no elenco; e, por último, preenche com quem restar.`
+        : `Calculada só pela posição cadastrada no elenco: cada vaga usa os atletas daquela posição com a maior nota
+      média geral; se sobrar vaga, preenche com quem restar.`}
+      Só fica vaga em aberto se você selecionar menos de 11 jogadores. Laterais ficam nas pontas da defesa e zagueiros no centro.
     </p>
 
     <div class="form-grid" style="margin-bottom:20px; max-width:680px;">
@@ -298,6 +309,13 @@ export function renderEscalacaoIdeal(root, state){
         <label>Formação</label>
         <select id="sel-formacao">
           ${Object.keys(FORMATIONS).map(f => `<option value="${f}" ${f === formacaoAtual ? "selected" : ""}>${f}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label>Critério</label>
+        <select id="sel-criterio">
+          <option value="jogada" ${criterio === "jogada" ? "selected" : ""}>Posição jogada nas partidas</option>
+          <option value="cadastro" ${criterio === "cadastro" ? "selected" : ""}>Posição cadastrada</option>
         </select>
       </div>
       <div class="field">
@@ -370,6 +388,7 @@ export function renderEscalacaoIdeal(root, state){
   // Trocar formação, período ou a seleção de jogadores invalida qualquer
   // arranjo manual feito até então — a sugestão automática é recalculada do zero.
   $("#sel-formacao", root)?.addEventListener("change", (e) => { formacaoAtual = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
+  $("#sel-criterio", root)?.addEventListener("change", (e) => { criterio = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
   $("#filtro-ano", root)?.addEventListener("change", (e) => { filtroAno = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
   $("#filtro-mes", root)?.addEventListener("change", (e) => { filtroMes = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
   $$("[data-excluir]", root).forEach(chk => {
