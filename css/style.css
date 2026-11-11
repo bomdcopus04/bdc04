@@ -532,3 +532,5 @@ tbody tr.clickable{cursor:pointer;}
   .mobile-topbar{display:none;}
 }
 .player-chip[hidden]{display:none !important;}
+/* Ranking: coluna da métrica selecionada em destaque sutil */
+th.col-ativa, td.col-ativa{ background:rgba(228,182,43,.16); font-weight:700; }

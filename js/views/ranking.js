@@ -139,17 +139,20 @@ export function renderRanking(root, state){
   const stats = statsPorAtleta(state.atletas.filter(ehJogador), jogosFiltrados, votanteIds);
   const listaFinal = ordenarPorMetrica(filtrarPorMetrica(stats, activeMetric), activeMetric);
 
-  const theadRowHtml = `<tr><th>#</th><th>Atleta</th><th>Posição</th><th>Jogos</th><th>Gols</th><th>Assist.</th><th>G+A</th><th>Nota média</th></tr>`;
+  // Coluna da métrica selecionada fica levemente destacada (cabeçalho + células).
+  const hl = (k) => activeMetric === k ? ` class="col-ativa"` : "";
+  const hlNum = (k) => activeMetric === k ? "pill-num col-ativa" : "pill-num";
+  const theadRowHtml = `<tr><th>#</th><th>Atleta</th><th>Posição</th><th${hl("jogos")}>Jogos</th><th${hl("gols")}>Gols</th><th${hl("assistencias")}>Assist.</th><th${hl("ga")}>G+A</th><th${hl("nota")}>Nota média</th></tr>`;
   const rows = listaFinal.map((s, i) => `
     <tr>
       <td class="pill-num">${i + 1}º</td>
       <td><strong class="atleta-link" data-atleta="${s.atleta.id}" title="Ver extrato">${escapeHtml(s.atleta.nome)}</strong></td>
       <td>${escapeHtml(s.atleta.posicao || "—")}</td>
-      <td class="pill-num">${s.jogosCount}</td>
-      <td class="pill-num">${s.gols}</td>
-      <td class="pill-num">${s.assistencias}</td>
-      <td class="pill-num">${s.gols + s.assistencias}</td>
-      <td>${fmt1(s.media)}</td>
+      <td class="${hlNum("jogos")}">${s.jogosCount}</td>
+      <td class="${hlNum("gols")}">${s.gols}</td>
+      <td class="${hlNum("assistencias")}">${s.assistencias}</td>
+      <td class="${hlNum("ga")}">${s.gols + s.assistencias}</td>
+      <td${hl("nota")}>${fmt1(s.media)}</td>
     </tr>`).join("");
 
   root.innerHTML = `
