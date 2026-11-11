@@ -58,6 +58,8 @@ function resumoJogo(jogo, atletas){
       m[id] = (m[id] || 0) + 1;
     });
     const max = Math.max(0, ...Object.values(m));
+    // Todo mundo empatado com 1 não é "destaque" — só mostra se for único ou tiver mais de 1.
+    if (max === 1 && Object.keys(m).length > 1) return null;
     return max > 0 ? { max, nomes: Object.keys(m).filter(id => m[id] === max).map(nome) } : null;
   };
   let melhorNota = null;
