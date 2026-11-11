@@ -70,7 +70,11 @@ function desenhar(root, state, jogoId){
   const cont = { vou: 0, talvez: 0, nao: 0, sem: 0 };
   jogadores.forEach(a => { const r = respostaDe.get(a.id); if (cont[r] !== undefined) cont[r]++; else cont.sem++; });
 
-  const nomesDe = (resp) => jogadores.filter(a => respostaDe.get(a.id) === resp).map(a => escapeHtml(a.nome)).join(", ");
+  // Ordem de resposta: o primeiro a responder aparece primeiro, o último por último
+  // (resposta ainda sem horário do servidor vai pro fim).
+  const ms = (id) => { const t = quandoDe.get(id); return t && typeof t.toMillis === "function" ? t.toMillis() : Infinity; };
+  const nomesDe = (resp) => jogadores.filter(a => respostaDe.get(a.id) === resp)
+    .sort((a, b) => (ms(a.id) > ms(b.id)) - (ms(a.id) < ms(b.id))).map(a => escapeHtml(a.nome)).join(", ");
 
   const linhas = jogadores.map(a => {
     const atual = respostaDe.get(a.id);
