@@ -1,5 +1,5 @@
 import { $, $$, escapeHtml, toast, openModal, closeModal, confirmAction, todayISO, formatDate } from "../utils.js";
-import { createDoc, saveDoc, removeDoc, createDocWithId } from "../db.js";
+import { createDoc, saveDoc, removeDoc, createDocWithId, getPrivateDoc } from "../db.js";
 
 // ============================================================================
 // Financeiro — saldo, lançamentos de entrada/saída, controle de mensalidade
@@ -207,19 +207,31 @@ function openEditTransacaoForm(t){
 // paga), só passa a valer pros próximos lançamentos.
 // ----------------------------------------------------------------------------
 function openConfigMensalidadeForm(state){
-  const atual = state.configFinanceiro?.valorMensalidade ?? 0;
+  const cfg = state.configFinanceiro || {};
+  const atual = cfg.valorMensalidade ?? 0;
   openModal(`
     <div class="modal-head">
-      <h3>Valor da mensalidade</h3>
+      <h3>Mensalidade e Pix</h3>
       <button class="modal-close" data-close>&times;</button>
     </div>
     <div class="modal-body">
       <form id="form-mensalidade-valor">
         <div class="field">
-          <label>Valor (R$) *</label>
+          <label>Valor da mensalidade (R$) *</label>
           <input type="number" name="valor" min="0" step="0.01" value="${atual || ""}" required>
         </div>
         <p class="field-hint">Esse valor vale a partir de agora — mensalidades já marcadas como pagas não mudam retroativamente.</p>
+        <div class="form-grid" style="margin-top:10px;">
+          <div class="field">
+            <label>Chave Pix do time</label>
+            <input type="text" name="chavePix" value="${escapeHtml(cfg.chavePix || "")}" placeholder="CPF, e-mail, telefone ou chave aleatória">
+          </div>
+          <div class="field">
+            <label>Favorecido (opcional)</label>
+            <input type="text" name="pixNome" value="${escapeHtml(cfg.pixNome || "")}" placeholder="Nome que aparece no Pix">
+          </div>
+        </div>
+        <p class="field-hint">A chave Pix entra automaticamente nas mensagens de cobrança.</p>
         <div class="form-actions">
           <button type="button" class="btn btn-ghost" data-close>Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar</button>
@@ -231,12 +243,17 @@ function openConfigMensalidadeForm(state){
 
   $("#form-mensalidade-valor").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const valor = Number(new FormData(e.target).get("valor"));
+    const fd = new FormData(e.target);
+    const valor = Number(fd.get("valor"));
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true;
     try{
-      await createDocWithId("configuracoes", "geral", { valorMensalidade: valor });
-      toast("Valor da mensalidade atualizado.", "ok");
+      await createDocWithId("configuracoes", "geral", {
+        valorMensalidade: valor,
+        chavePix: (fd.get("chavePix") || "").trim(),
+        pixNome: (fd.get("pixNome") || "").trim(),
+      });
+      toast("Configuração atualizada.", "ok");
       closeModal();
     }catch(err){
       console.error(err);
@@ -454,6 +471,63 @@ function pendenciasPorMes(state){
   }));
 }
 
+// Linha do Pix (se configurado) pras mensagens de cobrança.
+function linhaPix(state){
+  const c = state.configFinanceiro || {};
+  if (!c.chavePix) return "";
+  return `💳 Pix: ${c.chavePix}${c.pixNome ? ` (${c.pixNome})` : ""}`;
+}
+
+// Mensagem de cobrança individual: lista os meses em aberto, o valor e o Pix.
+function textoCobranca(state, atleta, meses){
+  const valor = state.configFinanceiro?.valorMensalidade ?? 0;
+  const total = meses.length * valor;
+  const linhas = [
+    `Fala, ${atleta.nome}! 👋`,
+    `Passando pra lembrar da mensalidade do Bom D' Copus ⚽`,
+    "",
+    `📅 Em aberto: ${meses.map(mesLabel).join(", ")}`,
+    `💰 Valor: ${meses.length > 1 ? `${meses.length} × ${fmtBRL(valor)} = ` : ""}${fmtBRL(total)}`,
+  ];
+  const pix = linhaPix(state);
+  if (pix) linhas.push("", pix);
+  linhas.push("", "Qualquer dúvida é só chamar! 🙌");
+  return linhas.join("\n");
+}
+
+function foneWhats(raw){
+  const d = String(raw || "").replace(/\D/g, "");
+  if (!d) return "";
+  return d.startsWith("55") && d.length >= 12 ? d : `55${d}`;
+}
+
+// O telefone pode estar no cadastro privado (acesso restrito) ou, em registros
+// antigos, no cadastro público do atleta.
+async function telefoneDoAtleta(atleta){
+  try{
+    const priv = await getPrivateDoc("atletas_privado", atleta.id);
+    if (priv?.telefone) return priv.telefone;
+  }catch(err){ /* sem acesso ao privado — tenta o público */ }
+  return atleta.telefone || "";
+}
+
+// Abre o WhatsApp na conversa do jogador com a cobrança pronta (só falta enviar).
+async function cobrarWhatsApp(state, atleta, meses){
+  const texto = textoCobranca(state, atleta, meses);
+  // Abre a aba já no clique (senão o navegador bloqueia o pop-up depois da espera).
+  const w = window.open("about:blank", "_blank");
+  const fone = foneWhats(await telefoneDoAtleta(atleta));
+  if (!fone){
+    w?.close();
+    toast(`${atleta.nome} está sem telefone cadastrado.`, "err");
+    return;
+  }
+  const url = `https://wa.me/${fone}?text=${encodeURIComponent(texto)}`;
+  if (w){ w.location.href = url; return; }
+  try{ await navigator.clipboard.writeText(texto); }catch(err){ /* ignora */ }
+  toast("O navegador bloqueou a nova aba. A mensagem foi copiada — abra o WhatsApp e cole.", "err");
+}
+
 function saldoAtual(transacoes){
   return transacoes.reduce((acc, t) => t.tipo === "saida" ? acc - (t.valor || 0) : acc + (t.valor || 0), 0);
 }
@@ -476,6 +550,8 @@ function textoPendencias(state){
     linhas.push(`💰 *Total pendente: ${fmtBRL(totalQtd * valor)}* (${totalQtd} mensalidade${totalQtd > 1 ? "s" : ""})`);
   }
   linhas.push(`🏦 *Saldo atual do caixa: ${fmtBRL(saldoAtual(state.financeiro || []))}*`, `Valor da mensalidade: ${fmtBRL(valor)}`);
+  const pix = linhaPix(state);
+  if (pix) linhas.push(pix);
   return linhas.join("\n");
 }
 
@@ -483,13 +559,32 @@ function openPendencias(state){
   const valor = state.configFinanceiro?.valorMensalidade ?? 0;
   const meses = pendenciasPorMes(state).filter(m => m.pendentes.length > 0).reverse();
   const totalQtd = meses.reduce((s, m) => s + m.pendentes.length, 0);
-  const blocos = meses.map(m => `
+
+  // Visão "por jogador": quais meses cada devedor tem em aberto.
+  const porJogador = new Map();
+  [...meses].reverse().forEach(m => m.pendentes.forEach(a => {
+    if (!porJogador.has(a.id)) porJogador.set(a.id, { atleta: a, meses: [] });
+    porJogador.get(a.id).meses.push(m.mes);
+  }));
+  const devedores = [...porJogador.values()].sort((x, y) => y.meses.length - x.meses.length || (x.atleta.nome || "").localeCompare(y.atleta.nome || "", "pt-BR"));
+
+  const blocosMes = meses.map(m => `
     <div class="card card-pad" style="margin-bottom:10px;">
       <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:6px;">
         <strong>${mesLabel(m.mes)}${m.mes === mesAtualRef() ? " <span style='font-weight:400; color:var(--ink-soft);'>(mês atual)</span>" : ""}</strong>
         <span style="font-family:var(--font-mono); font-weight:700; color:var(--danger);">${m.pendentes.length} pendente${m.pendentes.length > 1 ? "s" : ""} · ${fmtBRL(m.pendentes.length * valor)}</span>
       </div>
       <div style="font-size:13px; color:var(--ink-soft);">${m.pendentes.map(a => escapeHtml(a.nome)).join(", ")}</div>
+    </div>`).join("");
+
+  const blocosJogador = devedores.map(d => `
+    <div class="card card-pad" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div>
+        <strong>${escapeHtml(d.atleta.nome)}</strong>
+        <div style="font-size:12.5px; color:var(--ink-soft);">${d.meses.map(mesLabel).join(", ")}</div>
+        <div style="font-family:var(--font-mono); font-weight:700; color:var(--danger); margin-top:2px;">${d.meses.length} × ${fmtBRL(valor)} = ${fmtBRL(d.meses.length * valor)}</div>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm btn-cobrar" data-atleta-id="${d.atleta.id}">Cobrar no WhatsApp</button>
     </div>`).join("");
 
   openModal(`
@@ -503,8 +598,14 @@ function openPendencias(state){
         <div style="font-family:var(--font-mono); font-size:26px; font-weight:700; color:${totalQtd ? "var(--danger)" : "var(--ok)"};">${fmtBRL(totalQtd * valor)}</div>
         <div class="card-sub" style="margin:6px 0 0;">Saldo atual do caixa: <strong>${fmtBRL(saldoAtual(state.financeiro || []))}</strong></div>
       </div>
-      ${blocos || `<p style="color:var(--ink-faint); font-style:italic;">Nenhuma mensalidade pendente. 🎉</p>`}
-      <p class="field-hint">Considera os jogadores pagantes ativos, de ${mesLabel(MES_INICIO)} até o mês atual (respeitando "paga desde" e os meses isentos), no valor atual da mensalidade.</p>
+      ${totalQtd ? `
+      <div class="tabbar" style="margin-bottom:12px;">
+        <button type="button" class="tab-btn active" data-vis="mes">Por mês</button>
+        <button type="button" class="tab-btn" data-vis="jogador">Por jogador (cobrar)</button>
+      </div>
+      <div data-pane="mes">${blocosMes}</div>
+      <div data-pane="jogador" style="display:none;">${blocosJogador}</div>` : `<p style="color:var(--ink-faint); font-style:italic;">Nenhuma mensalidade pendente. 🎉</p>`}
+      <p class="field-hint">Considera os jogadores pagantes ativos, de ${mesLabel(MES_INICIO)} até o mês atual (respeitando "paga desde" e os meses isentos), no valor atual da mensalidade.${state.configFinanceiro?.chavePix ? "" : " Cadastre a chave Pix em “Editar valor” pra ela entrar nas cobranças."}</p>
       <div class="form-actions" style="justify-content:space-between;">
         <button type="button" class="btn btn-ghost" id="btn-copiar-pendencias">Copiar mensagem p/ diretoria</button>
         <button type="button" class="btn btn-primary" data-close>Fechar</button>
@@ -512,6 +613,14 @@ function openPendencias(state){
     </div>
   `);
   $$("[data-close]").forEach(b => b.addEventListener("click", closeModal));
+  $$(".tab-btn[data-vis]").forEach(btn => btn.addEventListener("click", () => {
+    $$(".tab-btn[data-vis]").forEach(b => b.classList.toggle("active", b === btn));
+    $$("[data-pane]").forEach(p => { p.style.display = p.dataset.pane === btn.dataset.vis ? "" : "none"; });
+  }));
+  $$(".btn-cobrar").forEach(btn => btn.addEventListener("click", () => {
+    const d = porJogador.get(btn.dataset.atletaId);
+    if (d) cobrarWhatsApp(state, d.atleta, d.meses);
+  }));
   $("#btn-copiar-pendencias").addEventListener("click", async () => {
     try{ await navigator.clipboard.writeText(textoPendencias(state)); toast("Mensagem copiada! Cole no WhatsApp.", "ok"); }
     catch(err){ toast("Não foi possível copiar automaticamente.", "err"); }
@@ -574,7 +683,10 @@ function openExtratoJogador(state){
       </div>
       <div id="ext-corpo"><p style="color:var(--ink-faint); font-style:italic;">Escolha um jogador para ver o extrato.</p></div>
       <div class="form-actions" style="justify-content:space-between;">
-        <button type="button" class="btn btn-ghost" id="btn-copiar-extrato" disabled>Copiar extrato</button>
+        <span style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-ghost" id="btn-copiar-extrato" disabled>Copiar extrato</button>
+          <button type="button" class="btn btn-ghost" id="btn-cobrar-extrato" disabled>Cobrar no WhatsApp</button>
+        </span>
         <button type="button" class="btn btn-primary" data-close>Fechar</button>
       </div>
     </div>
@@ -585,8 +697,9 @@ function openExtratoJogador(state){
   $("#ext-jogador").addEventListener("change", (e) => {
     atual = jogadores.find(a => a.id === e.target.value) || null;
     $("#btn-copiar-extrato").disabled = !atual;
-    if (!atual){ $("#ext-corpo").innerHTML = ""; return; }
+    if (!atual){ $("#ext-corpo").innerHTML = ""; $("#btn-cobrar-extrato").disabled = true; return; }
     const d = extratoJogadorDados(state, atual);
+    $("#btn-cobrar-extrato").disabled = d.qtdPend === 0;
     const rows = [...d.linhas].reverse().map(l => `
       <tr>
         <td>${mesLabel(l.mes)}</td>
@@ -607,6 +720,11 @@ function openExtratoJogador(state){
         <thead><tr><th>Mês</th><th>Situação</th><th>Pago em</th><th>Valor</th></tr></thead>
         <tbody>${rows || `<tr class="empty-row"><td colspan="4">Sem mensalidades no período.</td></tr>`}</tbody>
       </table></div>`;
+  });
+  $("#btn-cobrar-extrato").addEventListener("click", () => {
+    if (!atual) return;
+    const meses = extratoJogadorDados(state, atual).linhas.filter(l => l.status === "pendente").map(l => l.mes);
+    if (meses.length) cobrarWhatsApp(state, atual, meses);
   });
   $("#btn-copiar-extrato").addEventListener("click", async () => {
     if (!atual) return;
@@ -675,9 +793,9 @@ export function renderFinanceiro(root, state){
     <div class="card card-pad" style="margin:18px 0; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
       <div>
         <div class="card-title" style="margin-bottom:2px;">Valor da mensalidade</div>
-        <div class="card-sub" style="margin-bottom:0;">${fmtBRL(state.configFinanceiro?.valorMensalidade ?? 0)}</div>
+        <div class="card-sub" style="margin-bottom:0;">${fmtBRL(state.configFinanceiro?.valorMensalidade ?? 0)}${state.configFinanceiro?.chavePix ? ` · Pix: ${escapeHtml(state.configFinanceiro.chavePix)}` : " · Pix não cadastrado"}</div>
       </div>
-      <button class="btn btn-ghost btn-sm" id="btn-editar-mensalidade" type="button">Editar valor</button>
+      <button class="btn btn-ghost btn-sm" id="btn-editar-mensalidade" type="button">Editar valor e Pix</button>
     </div>
 
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px;">
