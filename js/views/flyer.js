@@ -1,4 +1,4 @@
-import { $, $$, escapeHtml, openModal, closeModal, toast, formatDateLong, avg, fmt1 } from "../utils.js";
+import { $, $$, escapeHtml, openModal, closeModal, toast, formatDateLong, formatDate, avg, fmt1 } from "../utils.js";
 import { saveDoc } from "../db.js";
 import { notasDoAtletaNoJogo, resultadoJogo, GOL_CONTRA_ID, posicaoJogadaNoJogo, normalizeEscalacao } from "../stats.js";
 
@@ -12,7 +12,7 @@ const DOURADO = "#E4B62B";
 const TEMAS = {
   noite: { nome: "Preto clássico", bg: "linear-gradient(180deg,#0d0d0d 0%,#1d1d1d 100%)", fg: "#ffffff", accent: DOURADO, muted: "#a9a9a9", muted2: "#cfcfcf", faint: "#5f5f5f", border: "none", ring: "transparent" },
   listras: { nome: "Preto com listras e moldura", bg: "repeating-linear-gradient(135deg,#0e0e0e 0,#0e0e0e 70px,#191919 70px,#191919 140px)", fg: "#ffffff", accent: DOURADO, muted: "#b5b5b5", muted2: "#d8d8d8", faint: "#6a6a6a", border: `16px solid ${DOURADO}`, ring: "transparent" },
-  ouro: { nome: "Amarelo", bg: "linear-gradient(180deg,#F0C53A 0%,#D9A614 100%)", fg: "#111111", accent: "#111111", muted: "#3b3210", muted2: "#2a2308", faint: "#6b5a1a", border: "none", ring: "#111111" },
+  arte: { nome: "Preto com moldura (estilo do time)", bg: "#000000", fg: "#ffffff", accent: DOURADO, muted: "#b5b5b5", muted2: "#d8d8d8", faint: "#6a6a6a", border: "none", ring: "transparent", decor: true },
 };
 
 const ESCUDO_MAX = 192; // px — pequeno de propósito (vai dentro do documento do adversário)
@@ -117,6 +117,39 @@ function legendaTexto(modelo, { jogo, adv, campo, resumo }){
   const advNome = adv?.nome || "Adversário";
   const linhas = [];
   const dados = [`🆚 Bom D' Copus x ${advNome}`, `📅 ${formatDateLong(jogo.data)}`];
+  if (modelo === "convite" && T.decor){
+    const t = 320;
+    const icone = (svg) => `<svg viewBox="0 0 24 24" width="92" height="92" fill="none" stroke="${DOURADO}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${svg}</svg>`;
+    const col = (ic, rot, val, tam) => `<div style="flex:1; text-align:center; padding:0 12px;">${ic}<div style="font-size:26px; letter-spacing:.3em; margin-top:14px;">${rot}</div><div style="font-size:${tam}px; font-weight:800; line-height:1.15; margin-top:6px;">${escapeHtml(val)}</div></div>`;
+    const div = `<div style="width:4px; align-self:stretch; background:${DOURADO};"></div>`;
+    const nome = (n) => `<div style="text-align:center; width:380px;"><div style="font-size:40px; letter-spacing:.16em; padding-bottom:14px; border-bottom:4px solid ${DOURADO};">${escapeHtml(n)}</div></div>`;
+    return `<div style="${base}">${cantos}
+      <div style="border:5px solid ${DOURADO}; padding:10px; margin-top:20px;">
+        <div style="border:2px solid ${DOURADO}; padding:14px 90px; font-size:104px; font-weight:900; font-style:italic; letter-spacing:.08em;">${escapeHtml(String(jogo.tipoPartida || "Amistoso").toUpperCase())}</div>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:center; gap:36px;">
+        ${bdc.replace(/__T__/g, t)}
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:150px; color:${DOURADO}; line-height:1;">VS</div>
+        ${escudoHtml(escudo, adv?.nome, t, T.accent)}
+      </div>
+      <div style="display:flex; justify-content:center; gap:60px;">
+        ${nome("BOM D' COPUS 04")}${nome((adv?.nome || "Adversário").toUpperCase())}
+      </div>
+      <div style="width:100%; display:flex; align-items:stretch; border-top:0;">
+        ${col(icone('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7 14h2M11 14h2M15 14h2M7 17.5h2M11 17.5h2"/>'), "DATA", formatDate(jogo.data), 52)}
+        ${div}
+        ${col(icone('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>'), "HORÁRIO", jogo.horario || "—", 52)}
+        ${div}
+        ${col(icone('<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>'), "LOCAL", campo?.nome || "A definir", 40)}
+      </div>
+      <div style="width:100%; text-align:center;">
+        <div style="display:flex; align-items:center; gap:20px;"><div style="flex:1; height:3px; background:${DOURADO};"></div><div style="width:46px; height:46px; border-radius:50%; border:3px solid ${DOURADO};"></div><div style="flex:1; height:3px; background:${DOURADO};"></div></div>
+        <div style="font-size:26px; letter-spacing:.34em; margin-top:22px;">RAÇA &nbsp;•&nbsp; UNIÃO &nbsp;•&nbsp; RESPEITO &nbsp;•&nbsp; VONTADE</div>
+        <div style="font-size:18px; color:${T.faint}; letter-spacing:.06em; margin-top:16px;">Imagem gerada pelo app Bom D' Copus</div>
+      </div>
+    </div>`;
+  }
+
   if (modelo === "convite"){
     linhas.push("Partida Confirmada! ⚽🔥", "");
     if (jogo.horario) dados.push(`⏰ ${jogo.horario}`);
@@ -147,6 +180,16 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jo
   const W = 1080;
   const H = formato === "story" ? 1920 : 1350;
   const base = `width:${W}px; height:${H}px; box-sizing:border-box; padding:80px 70px; background:${T.bg}; color:${T.fg}; border:${T.border}; font-family:'Inter',system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:space-between; position:relative; overflow:hidden;`;
+  // Detalhes do tema "arte": riscos diagonais amarelos nos cantos.
+  const risco = (css) => `<div style="position:absolute; height:6px; background:${DOURADO}; ${css}"></div>`;
+  const cantos = T.decor ? [
+    risco("left:-60px; top:140px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),
+    risco("left:-60px; top:215px; width:380px; transform:rotate(-45deg); transform-origin:left center;"),
+    risco("left:-60px; top:290px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),
+    risco("right:-60px; bottom:140px; width:260px; transform:rotate(-45deg); transform-origin:right center;"),
+    risco("right:-60px; bottom:215px; width:380px; transform:rotate(-45deg); transform-origin:right center;"),
+    risco("right:-60px; bottom:290px; width:260px; transform:rotate(-45deg); transform-origin:right center;"),
+  ].join("") : "";
   const topo = `
     <div style="display:flex; align-items:center; gap:22px;">
       <img src="assets/logo-bomdcopus.png" style="width:96px; height:96px; border-radius:50%; object-fit:cover; box-shadow:0 0 0 4px ${T.ring};">
@@ -160,7 +203,7 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jo
 
   if (modelo === "convite"){
     const t = 330;
-    return `<div style="${base}">
+    return `<div style="${base}">${cantos}
       ${topo}
       ${tipo}
       <div style="display:flex; align-items:center; justify-content:center; gap:40px;">
@@ -190,7 +233,7 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jo
     const quadro = foto
       ? `<img src="${foto}" style="width:${ph}px; height:${ph}px; object-fit:cover; border-radius:44px; border:10px solid ${DOURADO};">`
       : `<div style="width:${ph}px; height:${ph}px; border-radius:44px; border:10px solid ${DOURADO}; display:flex; align-items:center; justify-content:center; font-family:'Bebas Neue',sans-serif; font-size:${Math.round(ph * 0.4)}px; color:${DOURADO};">${escapeHtml(iniciais(j?.nome))}</div>`;
-    return `<div style="${base}">
+    return `<div style="${base}">${cantos}
       ${topo}
       <div style="font-family:'Bebas Neue',sans-serif; font-size:76px; letter-spacing:.2em; color:${DOURADO};">MELHOR DO JOGO</div>
       ${quadro}
@@ -224,7 +267,7 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jo
       ${dest.map(([l, v]) => `<div style="border:3px solid ${DOURADO}; border-radius:18px; padding:16px 26px; text-align:center;"><div style="font-size:24px; letter-spacing:.14em; color:${DOURADO};">${l}</div><div style="font-size:38px; font-weight:700;">${escapeHtml(v)}</div></div>`).join("")}
     </div>` : "";
 
-  return `<div style="${base}">
+  return `<div style="${base}">${cantos}
     ${topo}
     <div style="text-align:center;">
       <div style="font-family:'Bebas Neue',sans-serif; font-size:56px; letter-spacing:.2em; color:${DOURADO};">${rotulo ? `${rotulo} · ` : ""}${escapeHtml(String(jogo.tipoPartida || "Amistoso").toUpperCase())}</div>
