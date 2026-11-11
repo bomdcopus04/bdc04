@@ -47,6 +47,18 @@ function fmtBRL(n){
   return (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+// Primeiro mês em que o jogador passa a dever mensalidade ("Paga mensalidade
+// desde" no cadastro). Sem preenchimento, vale desde o início do controle.
+function inicioPagamento(atleta){
+  return atleta.pagoDesde && atleta.pagoDesde > MES_INICIO ? atleta.pagoDesde : MES_INICIO;
+}
+const pagouMes = (transacoes, mesRef, atletaId) => transacoes.some(t => t.tipo === "mensalidade" && t.mesRef === mesRef && t.atletaId === atletaId);
+const isentoMes = (transacoes, mesRef, atletaId) => transacoes.some(t => t.tipo === "isencao" && t.mesRef === mesRef && t.atletaId === atletaId);
+
+function idIsencao(mesRef, atletaId){
+  return `isen_${mesRef}_${atletaId}`;
+}
+
 function idMensalidade(mesRef, atletaId){
   return `mens_${mesRef}_${atletaId}`;
 }
@@ -59,13 +71,15 @@ const MESES_VISIVEIS_TELA = 3;
 // Monta o "tile" de um mês (nome + quantas mensalidades já foram pagas) —
 // usado tanto na tela principal quanto nos modais de meses futuros/todos.
 function mesTileHtml(mesRef, transacoes, pagantesAtivos){
-  const pagos = pagantesAtivos.filter(a => transacoes.some(
-    t => t.tipo === "mensalidade" && t.mesRef === mesRef && t.atletaId === a.id
-  )).length;
+  // Conta quem deve (ou já pagou) naquele mês: ignora quem ainda não tinha
+  // começado a pagar e quem está isento.
+  const base = pagantesAtivos.filter(a => pagouMes(transacoes, mesRef, a.id)
+    || (inicioPagamento(a) <= mesRef && !isentoMes(transacoes, mesRef, a.id)));
+  const pagos = base.filter(a => pagouMes(transacoes, mesRef, a.id)).length;
   return `
     <button type="button" class="mes-tile" data-mes="${mesRef}">
       <div class="mes-nome">${mesLabel(mesRef)}</div>
-      <div class="mes-sub">${pagos}/${pagantesAtivos.length} pagas</div>
+      <div class="mes-sub">${pagos}/${base.length} pagas</div>
     </button>`;
 }
 
@@ -239,25 +253,30 @@ function openConfigMensalidadeForm(state){
 // ----------------------------------------------------------------------------
 function openMesDetalhe(mesRef, state){
   const valorMensalidade = state.configFinanceiro?.valorMensalidade ?? 0;
+  const transacoes = state.financeiro || [];
+  // Quem aparece: pagantes ativos que já começaram a pagar nesse mês (ou que
+  // já têm pagamento/isenção registrados nele).
   const atletasPagantes = (state.atletas || [])
-    .filter(a => a.pagante && a.ativo !== false)
+    .filter(a => a.pagante && a.ativo !== false
+      && (inicioPagamento(a) <= mesRef || pagouMes(transacoes, mesRef, a.id) || isentoMes(transacoes, mesRef, a.id)))
     .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
 
-  const statusInicial = (atletaId) => (state.financeiro || []).some(
-    f => f.tipo === "mensalidade" && f.mesRef === mesRef && f.atletaId === atletaId
-  );
+  const estado = {}; // atletaId -> "pago" | "pendente" | "isento"
+  atletasPagantes.forEach(a => {
+    estado[a.id] = pagouMes(transacoes, mesRef, a.id) ? "pago" : isentoMes(transacoes, mesRef, a.id) ? "isento" : "pendente";
+  });
+  const badgeCls = (e) => e === "pago" ? "badge-ok" : e === "isento" ? "badge-pending" : "badge-off";
+  const badgeTxt = (e) => e === "pago" ? "Pago" : e === "isento" ? "Isento" : "Não pago";
 
-  const rowsHtml = atletasPagantes.map(a => {
-    const pago = statusInicial(a.id);
-    return `
-      <label class="event-row" style="cursor:pointer; justify-content:space-between;" data-atleta-nome="${escapeHtml(a.nome)}">
-        <span style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" data-atleta-id="${a.id}" ${pago ? "checked" : ""} style="width:16px; height:16px;">
+  const rowsHtml = atletasPagantes.map(a => `
+      <div class="event-row" style="justify-content:space-between; gap:8px;" data-atleta-row="${a.id}">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; flex:1;">
+          <input type="checkbox" data-atleta-id="${a.id}" ${estado[a.id] === "pago" ? "checked" : ""} ${estado[a.id] === "isento" ? "disabled" : ""} style="width:16px; height:16px;">
           ${escapeHtml(a.nome)}
-        </span>
-        <span class="badge ${pago ? "badge-ok" : "badge-off"}">${pago ? "Pago" : "Não pago"}</span>
-      </label>`;
-  }).join("");
+        </label>
+        <span class="badge ${badgeCls(estado[a.id])}">${badgeTxt(estado[a.id])}</span>
+        <button type="button" class="btn btn-ghost btn-sm btn-isentar" data-atleta-id="${a.id}" ${estado[a.id] === "pago" ? "disabled" : ""}>${estado[a.id] === "isento" ? "Cobrar" : "Isentar"}</button>
+      </div>`).join("");
 
   openModal(`
     <div class="modal-head">
@@ -265,8 +284,8 @@ function openMesDetalhe(mesRef, state){
       <button class="modal-close" data-close>&times;</button>
     </div>
     <div class="modal-body">
-      <p class="field-hint" style="margin-bottom:10px;">Valor da mensalidade: <strong>${fmtBRL(valorMensalidade)}</strong></p>
-      ${atletasPagantes.length ? rowsHtml : `<p style="color:var(--ink-faint); font-style:italic;">Nenhum jogador pagante ativo cadastrado.</p>`}
+      <p class="field-hint" style="margin-bottom:10px;">Valor da mensalidade: <strong>${fmtBRL(valorMensalidade)}</strong>. "Isentar" tira o jogador da cobrança só deste mês (ex.: ficou parado).</p>
+      ${atletasPagantes.length ? rowsHtml : `<p style="color:var(--ink-faint); font-style:italic;">Nenhum jogador pagante ativo cadastrado para este mês.</p>`}
       <div class="form-actions" style="justify-content:space-between;">
         <button type="button" class="btn btn-ghost" id="btn-copiar-lista">Copiar lista p/ WhatsApp</button>
         <button type="button" class="btn btn-primary" data-close>Fechar</button>
@@ -275,13 +294,28 @@ function openMesDetalhe(mesRef, state){
   `);
   $$("[data-close]").forEach(b => b.addEventListener("click", closeModal));
 
+  // Atualiza a linha (badge, checkbox, botão) conforme o estado do jogador.
+  const atualizarLinha = (atletaId) => {
+    const row = document.querySelector(`[data-atleta-row="${atletaId}"]`);
+    if (!row) return;
+    const e = estado[atletaId];
+    const badge = row.querySelector(".badge");
+    badge.textContent = badgeTxt(e);
+    badge.className = `badge ${badgeCls(e)}`;
+    const chk = row.querySelector("input[type=checkbox]");
+    chk.checked = e === "pago";
+    chk.disabled = e === "isento";
+    const btn = row.querySelector(".btn-isentar");
+    btn.disabled = e === "pago";
+    btn.textContent = e === "isento" ? "Cobrar" : "Isentar";
+  };
+
   $$("input[type=checkbox][data-atleta-id]").forEach(chk => {
     chk.addEventListener("change", async () => {
       const atletaId = chk.dataset.atletaId;
       const atleta = atletasPagantes.find(a => a.id === atletaId);
       const docId = idMensalidade(mesRef, atletaId);
-      const badge = chk.closest("label").querySelector(".badge");
-      const wasChecked = !chk.checked; // valor antes desse clique, pra reverter se der erro
+      const anterior = estado[atletaId];
       chk.disabled = true;
       try{
         if (chk.checked){
@@ -293,28 +327,52 @@ function openMesDetalhe(mesRef, state){
             atletaId,
             mesRef,
           });
-          badge.textContent = "Pago";
-          badge.className = "badge badge-ok";
+          estado[atletaId] = "pago";
         } else {
           await removeDoc("financeiro", docId);
-          badge.textContent = "Não pago";
-          badge.className = "badge badge-off";
+          estado[atletaId] = "pendente";
         }
       }catch(err){
         console.error(err);
         toast("Erro ao atualizar: " + err.message, "err");
-        chk.checked = wasChecked;
+        estado[atletaId] = anterior;
       }
-      chk.disabled = false;
+      atualizarLinha(atletaId);
+    });
+  });
+
+  $$(".btn-isentar").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const atletaId = btn.dataset.atletaId;
+      const atleta = atletasPagantes.find(a => a.id === atletaId);
+      const docId = idIsencao(mesRef, atletaId);
+      btn.disabled = true;
+      try{
+        if (estado[atletaId] === "isento"){
+          await removeDoc("financeiro", docId);
+          estado[atletaId] = "pendente";
+        } else {
+          await createDocWithId("financeiro", docId, {
+            tipo: "isencao",
+            valor: 0,
+            data: todayISO(),
+            descricao: `Isento ${mesLabel(mesRef)} — ${atleta.nome}`,
+            atletaId,
+            mesRef,
+          });
+          estado[atletaId] = "isento";
+        }
+      }catch(err){
+        console.error(err);
+        toast("Erro ao atualizar: " + err.message, "err");
+      }
+      atualizarLinha(atletaId);
     });
   });
 
   $("#btn-copiar-lista")?.addEventListener("click", async () => {
-    const linhas = $$("label.event-row[data-atleta-nome]").map(label => {
-      const nome = label.dataset.atletaNome;
-      const pago = label.querySelector("input[type=checkbox]").checked;
-      return `${pago ? "✅" : "❌"} ${nome}`;
-    });
+    const icone = { pago: "✅", pendente: "❌", isento: "➖" };
+    const linhas = atletasPagantes.map(a => `${icone[estado[a.id]]} ${a.nome}${estado[a.id] === "isento" ? " (isento)" : ""}`);
     const texto = `*Mensalidades — ${mesLabel(mesRef)}*\n${linhas.join("\n")}`;
     try{
       await navigator.clipboard.writeText(texto);
@@ -388,11 +446,11 @@ function pendenciasPorMes(state){
   const transacoes = state.financeiro || [];
   const pagantes = (state.atletas || []).filter(a => a.pagante && a.ativo !== false)
     .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
-  const pagou = (mesRef, atletaId) => transacoes.some(t => t.tipo === "mensalidade" && t.mesRef === mesRef && t.atletaId === atletaId);
   return mesesEntre(MES_INICIO, mesAtualRef()).map(mes => ({
     mes,
-    pendentes: pagantes.filter(a => !pagou(mes, a.id)),
-    pagos: pagantes.filter(a => pagou(mes, a.id)).length,
+    // Deve quem já começou a pagar nesse mês, não pagou e não está isento.
+    pendentes: pagantes.filter(a => inicioPagamento(a) <= mes && !pagouMes(transacoes, mes, a.id) && !isentoMes(transacoes, mes, a.id)),
+    pagos: pagantes.filter(a => pagouMes(transacoes, mes, a.id)).length,
   }));
 }
 
@@ -446,7 +504,7 @@ function openPendencias(state){
         <div class="card-sub" style="margin:6px 0 0;">Saldo atual do caixa: <strong>${fmtBRL(saldoAtual(state.financeiro || []))}</strong></div>
       </div>
       ${blocos || `<p style="color:var(--ink-faint); font-style:italic;">Nenhuma mensalidade pendente. 🎉</p>`}
-      <p class="field-hint">Considera os jogadores pagantes ativos, de ${mesLabel(MES_INICIO)} até o mês atual, e o valor atual da mensalidade.</p>
+      <p class="field-hint">Considera os jogadores pagantes ativos, de ${mesLabel(MES_INICIO)} até o mês atual (respeitando "paga desde" e os meses isentos), no valor atual da mensalidade.</p>
       <div class="form-actions" style="justify-content:space-between;">
         <button type="button" class="btn btn-ghost" id="btn-copiar-pendencias">Copiar mensagem p/ diretoria</button>
         <button type="button" class="btn btn-primary" data-close>Fechar</button>
@@ -474,7 +532,8 @@ function extratoJogadorDados(state, atleta){
   const linhas = meses.map(mes => {
     const t = porMes[mes];
     if (t) return { mes, status: "pago", valor: t.valor ?? 0, data: t.data };
-    if (mes > mesAtualRef() || !eLinha) return null;
+    if (isentoMes(state.financeiro || [], mes, atleta.id)) return { mes, status: "isento", valor: 0 };
+    if (mes > mesAtualRef() || !eLinha || mes < inicioPagamento(atleta)) return null;
     return { mes, status: "pendente", valor: valorAtual };
   }).filter(Boolean);
   const totalPago = linhas.filter(l => l.status === "pago").reduce((s, l) => s + l.valor, 0);
@@ -486,6 +545,7 @@ function textoExtrato(atleta, d){
   const linhas = [`🧾 *Extrato financeiro — ${atleta.nome}*`, `Posição em ${formatDate(todayISO())}`, ""];
   d.linhas.forEach(l => linhas.push(l.status === "pago"
     ? `✅ ${mesLabel(l.mes)} — pago em ${formatDate(l.data)} (${fmtBRL(l.valor)})`
+    : l.status === "isento" ? `➖ ${mesLabel(l.mes)} — isento`
     : `❌ ${mesLabel(l.mes)} — pendente (${fmtBRL(l.valor)})`));
   if (!d.linhas.length) linhas.push("Sem mensalidades no período.");
   linhas.push("", `💰 Pago: ${fmtBRL(d.totalPago)} (${d.qtdPagas} ${d.qtdPagas === 1 ? "mês" : "meses"})`, `⏳ Pendente: ${fmtBRL(d.totalPend)} (${d.qtdPend} ${d.qtdPend === 1 ? "mês" : "meses"})`);
@@ -530,9 +590,9 @@ function openExtratoJogador(state){
     const rows = [...d.linhas].reverse().map(l => `
       <tr>
         <td>${mesLabel(l.mes)}</td>
-        <td><span class="badge ${l.status === "pago" ? "badge-ok" : "badge-danger"}">${l.status === "pago" ? "Pago" : "Pendente"}</span></td>
+        <td><span class="badge ${l.status === "pago" ? "badge-ok" : l.status === "isento" ? "badge-off" : "badge-danger"}">${l.status === "pago" ? "Pago" : l.status === "isento" ? "Isento" : "Pendente"}</span></td>
         <td>${l.status === "pago" ? formatDate(l.data) : "—"}</td>
-        <td style="font-family:var(--font-mono); font-weight:700;">${fmtBRL(l.valor)}</td>
+        <td style="font-family:var(--font-mono); font-weight:700;">${l.status === "isento" ? "—" : fmtBRL(l.valor)}</td>
       </tr>`).join("");
     $("#ext-corpo").innerHTML = `
       <div class="kpi-grid" style="margin-bottom:12px;">
@@ -541,6 +601,7 @@ function openExtratoJogador(state){
         <div class="kpi-tile"><div class="kpi-label">Meses pagos</div><div class="kpi-value">${d.qtdPagas}</div></div>
         <div class="kpi-tile"><div class="kpi-label">Meses pendentes</div><div class="kpi-value">${d.qtdPend}</div></div>
       </div>
+      ${atual.pagante && atual.pagoDesde ? `<p class="field-hint">Paga mensalidade desde ${mesLabel(atual.pagoDesde)}.</p>` : ""}
       ${atual.pagante ? "" : `<p class="field-hint">Este jogador não está marcado como pagante — só aparecem os meses que ele já pagou.</p>`}
       <div class="table-wrap"><table>
         <thead><tr><th>Mês</th><th>Situação</th><th>Pago em</th><th>Valor</th></tr></thead>
@@ -572,7 +633,7 @@ export function renderFinanceiro(root, state){
   const mesesHtml = mesesRecentes.map(m => mesTileHtml(m, transacoes, pagantesAtivos)).join("");
 
   const atletasPorId = Object.fromEntries((state.atletas || []).map(a => [a.id, a]));
-  const historicoOrdenado = [...transacoes].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+  const historicoOrdenado = transacoes.filter(t => t.tipo !== "isencao").sort((a, b) => (b.data || "").localeCompare(a.data || ""));
 
   const historicoRows = historicoOrdenado.map(t => {
     const tipoLabel = t.tipo === "entrada" ? "Entrada" : t.tipo === "saida" ? "Saída" : "Mensalidade";

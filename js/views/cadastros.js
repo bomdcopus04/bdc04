@@ -37,6 +37,10 @@ export function fieldHtml(f, item){
     return `<div class="${spanCls}"><label>${f.label}${f.required ? " *" : ""}</label>
       <input type="time" name="${f.key}" value="${escapeHtml(val)}" ${req}></div>`;
   }
+  if (f.type === "month"){
+    return `<div class="${spanCls}"><label>${f.label}</label>
+      <input type="month" name="${f.key}" value="${escapeHtml(val)}"></div>`;
+  }
   if (f.type === "date"){
     return `<div class="${spanCls}"><label>${f.label}${f.required ? " *" : ""}</label>
       <input type="date" name="${f.key}" value="${escapeHtml(val)}" ${req}></div>`;
@@ -353,6 +357,7 @@ export function renderAtletas(root, state){
       { key: "ativo", label: "Atleta ativo no elenco", type: "checkbox", default: true },
       { key: "podeVotar", label: "Direito a voto (diretor/capitão)", type: "checkbox", default: false },
       { key: "pagante", label: "Pagante (paga mensalidade)", type: "checkbox", default: false },
+      { key: "pagoDesde", label: "Paga mensalidade desde (mês — opcional; vazio = desde o início)", type: "month" },
       { key: "observacoes", label: "Observações", type: "textarea", span2: true },
     ],
     // "Nome completo" e "Telefone" ficam disponíveis no cadastro mas não
