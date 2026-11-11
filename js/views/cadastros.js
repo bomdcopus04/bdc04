@@ -349,7 +349,7 @@ export function renderAtletas(root, state){
     fields: [
       { key: "nome", label: "Nome", type: "text", required: true, span2: true },
       { key: "nomeCompleto", label: "Nome completo", type: "text", span2: true },
-      { key: "telefone", label: "Telefone", type: "text", placeholder: "(00) 00000-0000" },
+      { key: "telefone", label: "Telefone", type: "text", placeholder: "(00) 00000-0000", private: true },
       { key: "posicao", label: "Posição / categoria", type: "select", options: CATEGORIAS_ATLETA, placeholder: "Selecione" },
       { key: "numero", label: "Número da camisa", type: "number", min: 0 },
       { key: "cpf", label: "CPF (opcional)", type: "text", placeholder: "000.000.000-00", private: true },
@@ -360,14 +360,13 @@ export function renderAtletas(root, state){
       { key: "pagoDesde", label: "Paga mensalidade desde (mês — opcional; vazio = desde o início)", type: "month" },
       { key: "observacoes", label: "Observações", type: "textarea", span2: true },
     ],
-    // "Nome completo" e "Telefone" ficam disponíveis no cadastro mas não
-    // entram na tabela por padrão (default:false) — o usuário liga essas
-    // colunas pelo botão "Editar colunas" se quiser vê-las.
+    // "Nome completo" fica disponível no cadastro mas não
+    // entra na tabela por padrão (default:false) — o usuário liga essa
+    // coluna pelo botão "Editar colunas" se quiser vê-la. O telefone é privado (só no formulário).
     columns: [
       { key: "numero", label: "#", render: a => `<span class="pill-num">${a.numero ?? "—"}</span>`, sort: a => a.numero ?? null, default: true },
       { key: "nome", label: "Nome", render: a => `<strong>${escapeHtml(a.nome)}</strong>`, sort: a => (a.nome || "").toLowerCase(), default: true },
       { key: "nomeCompleto", label: "Nome completo", render: a => escapeHtml(a.nomeCompleto || "—"), sort: a => (a.nomeCompleto || "").toLowerCase(), default: false },
-      { key: "telefone", label: "Telefone", render: a => escapeHtml(a.telefone || "—"), sort: a => a.telefone || "", default: false },
       { key: "posicao", label: "Posição", render: a => escapeHtml(a.posicao || "—"), sort: a => a.posicao || "", default: true },
       { key: "status", label: "Status", render: a => a.ativo === false
         ? `<span class="badge badge-off">Inativo</span>`
