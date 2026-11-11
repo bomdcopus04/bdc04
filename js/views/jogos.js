@@ -344,10 +344,23 @@ function renderEscalacaoPanel(jogo, atletas, field, presencas){
     ? `Mostrando os ${confirmados.size} que confirmaram presença. Marque quem jogou e a posição; se alguém foi sem confirmar, adicione abaixo.`
     : "Selecione os atletas que jogaram e a posição em que atuaram nesta partida.";
 
+  // Atalhos (só em jogo agendado): preencher com os confirmados (escalação
+  // inicial) ou copiar a inicial (escalação final). Nada é gravado até clicar em Salvar.
+  const temInicial = normalizeEscalacao(jogo.escalacaoInicial).length > 0;
+  let atalho = "";
+  if (jogo.status === "agendado"){
+    if (field === "escalacaoInicial" && confirmados.size > 0){
+      atalho = `<button type="button" class="btn btn-ghost btn-sm" data-preencher="confirmados">Preencher com os confirmados (${confirmados.size})</button>`;
+    } else if (field === "escalacaoFinal" && temInicial){
+      atalho = `<button type="button" class="btn btn-ghost btn-sm" data-preencher="inicial">Copiar da escalação inicial</button>`;
+    }
+  }
+
   return `
     <div class="card card-pad">
       <div class="card-title">${field === "escalacaoInicial" ? "Escalação inicial" : "Escalação final"}</div>
       <div class="card-sub">${sub}</div>
+      ${atalho ? `<div style="margin:0 0 12px;">${atalho}</div>` : ""}
       <div class="player-grid player-grid-escalacao">
         ${disponiveis.map(chip).join("")}
       </div>
@@ -379,6 +392,32 @@ function wireEscalacaoPanel(root, jogo, field, panelSel, presencas){
     });
     cb.addEventListener("change", sync);
   });
+  // Marca/desmarca um jogador da lista (mostrando o chip se estiver escondido).
+  const marcar = (id, ligado, posicao) => {
+    const chip = panel.querySelector(`.player-chip[data-chip="${id}"]`);
+    if (!chip) return;
+    const cb = chip.querySelector('input[type="checkbox"]');
+    if (ligado) chip.hidden = false;
+    cb.checked = ligado;
+    const sel = chip.querySelector("select");
+    if (ligado && sel && posicao) sel.value = posicao;
+    cb.dispatchEvent(new Event("change"));
+    if (ligado) panel.querySelector(`.add-extra option[value="${id}"]`)?.remove();
+  };
+  $$("[data-preencher]", panel).forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.preencher === "confirmados"){
+      // Marca todos os confirmados; a posição já vem do cadastro (padrão do seletor).
+      (presencas || []).filter(p => p.resposta === "vou").forEach(p => marcar(p.atletaId, true, null));
+      toast("Confirmados marcados. Ajuste o que precisar e clique em Salvar.", "ok");
+    } else {
+      // Copia a escalação inicial (jogadores e posições) pra final.
+      $$(".player-chip", panel).forEach(chip => marcar(chip.dataset.chip, false, null));
+      normalizeEscalacao(jogo.escalacaoInicial).forEach(e => marcar(e.atletaId, true, e.posicao));
+      toast("Escalação inicial copiada. Ajuste as mudanças e clique em Salvar.", "ok");
+    }
+    const ex = panel.querySelector(".add-extra");
+    if (ex && ex.options.length <= 1) ex.closest(".field")?.remove();
+  }));
   const extra = $(".add-extra", panel);
   extra?.addEventListener("change", () => {
     const id = extra.value;
