@@ -111,6 +111,36 @@ function resumoJogo(jogo, atletas){
   return { gols, artilheiro: conta("atletaGolId"), garcom: conta("atletaAssistId"), melhorNota, ranking, infoJogador };
 }
 
+// Legenda pronta pra colar na postagem (convite ou resultado).
+const HASHTAGS = "#bdc04\n#futeboldevarzea\n#somosbdc";
+function legendaTexto(modelo, { jogo, adv, campo, resumo }){
+  const advNome = adv?.nome || "Adversário";
+  const linhas = [];
+  const dados = [`🆚 Bom D' Copus x ${advNome}`, `📅 ${formatDateLong(jogo.data)}`];
+  if (modelo === "convite"){
+    linhas.push("Partida Confirmada! ⚽🔥", "");
+    if (jogo.horario) dados.push(`⏰ ${jogo.horario}`);
+    if (campo) dados.push(`📍 ${campo.nome}`);
+    if (jogo.tipoPartida) dados.push(`🏷️ ${jogo.tipoPartida}`);
+    linhas.push(...dados);
+  } else {
+    linhas.push("Partida Encerrada! 🏁", "");
+    const res = resultadoJogo(jogo);
+    const rotulo = res === "vitoria" ? " — Vitória 🏆" : res === "derrota" ? " — Derrota" : res === "empate" ? " — Empate 🤝" : "";
+    if (jogo.placarNos !== null && jogo.placarNos !== undefined) dados.push(`🔢 Placar: Bom D' Copus ${jogo.placarNos} x ${jogo.placarAdversario ?? 0} ${advNome}${rotulo}`);
+    if (campo) dados.push(`📍 ${campo.nome}`);
+    if (jogo.tipoPartida) dados.push(`🏷️ ${jogo.tipoPartida}`);
+    linhas.push(...dados);
+    if (resumo.gols.length){
+      linhas.push("", "⚽ Gols e assistências:");
+      resumo.gols.forEach(g => linhas.push(`• ${g.gol}${g.assist ? ` (assist. ${g.assist})` : ""}`));
+    }
+    if (resumo.melhorNota) linhas.push("", `⭐ Melhor do jogo: ${resumo.melhorNota.nome} — nota ${fmt1(resumo.melhorNota.nota)}`);
+  }
+  linhas.push("", HASHTAGS);
+  return linhas.join("\n");
+}
+
 function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jogadorId, foto }){
   const T = TEMAS[tema] || TEMAS.noite;
   const DOURADO = T.accent;
@@ -264,6 +294,7 @@ export function openFlyerModal(state, jogo){
       <div id="fl-prev-wrap" style="width:100%; max-width:420px; margin:0 auto; overflow:hidden; border-radius:10px; background:#111;"><div id="fl-prev" style="transform-origin:top left;"></div></div>
       <div class="form-actions" style="margin-top:14px;">
         <button type="button" class="btn btn-ghost" data-close>Fechar</button>
+        <button type="button" class="btn btn-ghost" id="fl-legenda">Copiar legenda</button>
         <button type="button" class="btn btn-ghost" id="fl-baixar">Baixar</button>
         <button type="button" class="btn btn-primary" id="fl-compartilhar">Compartilhar</button>
       </div>
@@ -334,6 +365,12 @@ export function openFlyerModal(state, jogo){
     }
   };
   const nomeArquivo = () => `${modelo}-bom-d-copus-${jogo.data || "jogo"}.png`;
+
+  $("#fl-legenda").addEventListener("click", async () => {
+    const texto = legendaTexto(modelo === "convite" ? "convite" : "resultado", { jogo, adv, campo, resumo });
+    try{ await navigator.clipboard.writeText(texto); toast(`Legenda ${modelo === "convite" ? "do convite" : "do resultado"} copiada.`, "ok"); }
+    catch(err){ toast("Não foi possível copiar a legenda.", "err"); }
+  });
 
   $("#fl-baixar").addEventListener("click", async (e) => {
     const btn = e.currentTarget; btn.disabled = true;
