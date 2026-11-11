@@ -1,5 +1,5 @@
 import { $, $$, escapeHtml, openModal, closeModal, toast, confirmAction, formatDate, formatDateLong, todayISO, fmt1, ratingWidgetHtml, wireRatingWidgets, reRenderKeepingFocus } from "../utils.js";
-import { createDoc, saveDoc, removeDoc, updateJogoField, listenPresencas } from "../db.js";
+import { createDoc, saveDoc, removeDoc, updateJogoField, listenPresencas, setPresenca } from "../db.js";
 import { fieldHtml, collectFormData, POSICOES } from "./cadastros.js";
 import { resultadoJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida } from "../stats.js";
 
@@ -275,8 +275,8 @@ export function renderJogoDetail(root, state, jogoId){
     tipoPartida: "Amistoso", observacoes: jogo.observacoes || "",
   }));
 
-  wireEscalacaoPanel(root, jogo, "escalacaoInicial", "[data-panel='escalacao-inicial']");
-  wireEscalacaoPanel(root, jogo, "escalacaoFinal", "[data-panel='escalacao-final']");
+  wireEscalacaoPanel(root, jogo, "escalacaoInicial", "[data-panel='escalacao-inicial']", presencasJogo);
+  wireEscalacaoPanel(root, jogo, "escalacaoFinal", "[data-panel='escalacao-final']", presencasJogo);
   wireGolsPanel(root, jogo, state.atletas);
   wireAvaliacoesPanel(root, jogo);
 }
@@ -354,7 +354,7 @@ function renderEscalacaoPanel(jogo, atletas, field, presencas){
   `;
 }
 
-function wireEscalacaoPanel(root, jogo, field, panelSel){
+function wireEscalacaoPanel(root, jogo, field, panelSel, presencas){
   const panel = $(panelSel, root);
   if (!panel) return;
   $$(".player-chip", panel).forEach(chip => {
@@ -404,6 +404,15 @@ function wireEscalacaoPanel(root, jogo, field, panelSel){
     btn.disabled = true;
     try{
       await updateJogoField(jogo.id, { [field]: entries });
+      // Em jogo agendado, quem foi escalado conta como presença confirmada
+      // ("Vou"), mesmo que não tenha respondido pelo link (ou tenha dito
+      // talvez/não vou) — assim a lista de presença reflete quem de fato vai.
+      if (jogo.status === "agendado"){
+        const respAtual = new Map((presencas || []).map(p => [p.atletaId, p.resposta]));
+        const pendentes = entries.filter(e => respAtual.get(e.atletaId) !== "vou");
+        try{ await Promise.all(pendentes.map(e => setPresenca(jogo.id, e.atletaId, "vou"))); }
+        catch(err){ console.error(err); }
+      }
       toast("Escalação salva.", "ok");
     }catch(err){
       toast("Erro ao salvar: " + err.message, "err");
