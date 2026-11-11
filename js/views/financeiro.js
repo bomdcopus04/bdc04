@@ -488,7 +488,7 @@ function textoExtrato(atleta, d){
     ? `✅ ${mesLabel(l.mes)} — pago em ${formatDate(l.data)} (${fmtBRL(l.valor)})`
     : `❌ ${mesLabel(l.mes)} — pendente (${fmtBRL(l.valor)})`));
   if (!d.linhas.length) linhas.push("Sem mensalidades no período.");
-  linhas.push("", `💰 Pago: ${fmtBRL(d.totalPago)} (${d.qtdPagas} mês${d.qtdPagas === 1 ? "" : "es"})`, `⏳ Pendente: ${fmtBRL(d.totalPend)} (${d.qtdPend} mês${d.qtdPend === 1 ? "" : "es"})`);
+  linhas.push("", `💰 Pago: ${fmtBRL(d.totalPago)} (${d.qtdPagas} ${d.qtdPagas === 1 ? "mês" : "meses"})`, `⏳ Pendente: ${fmtBRL(d.totalPend)} (${d.qtdPend} ${d.qtdPend === 1 ? "mês" : "meses"})`);
   return linhas.join("\n");
 }
 
