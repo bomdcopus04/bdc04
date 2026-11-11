@@ -12,6 +12,7 @@ import { renderAvaliacao } from "./views/avaliacao.js";
 import { renderFinanceiro } from "./views/financeiro.js";
 import { renderRelatoriosHub } from "./views/relatorios.js";
 import { renderExtrato } from "./views/extrato.js";
+import { renderPresenca } from "./views/presenca.js";
 
 const state = {
   adversarios: [], campos: [], atletas: [], jogos: [], financeiro: [], configFinanceiro: null,
@@ -170,6 +171,7 @@ function render(){
     return;
   }
   if (route === "extrato"){ renderExtrato(root, state, subId); return; }
+  if (route === "presenca"){ renderPresenca(root, state, subId); return; }
   const fn = ROUTES[route];
   if (fn) fn(root, state);
   else renderDashboard(root, state);

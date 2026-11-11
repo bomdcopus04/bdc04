@@ -1,6 +1,6 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
-  query, orderBy, serverTimestamp, setDoc, getDoc
+  query, orderBy, where, serverTimestamp, setDoc, getDoc
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { db } from "./auth.js";
 
@@ -49,6 +49,30 @@ export function listenDoc(name, id, cb){
   }, (err) => {
     console.error(`Erro ao ouvir ${name}/${id}:`, err);
     cb(null, err);
+  });
+}
+
+// ----------------------------------------------------------------------------
+// Presenças (confirmação de presença por jogo) — coleção pública: qualquer
+// pessoa com o link do jogo pode marcar. Doc id = `${jogoId}_${atletaId}`,
+// então responder de novo só sobrescreve a resposta anterior.
+// ----------------------------------------------------------------------------
+
+export function listenPresencas(jogoId, cb){
+  const q = query(collection(db, "presencas"), where("jogoId", "==", jogoId));
+  return onSnapshot(q, (snap) => {
+    const items = [];
+    snap.forEach(d => items.push({ id: d.id, ...d.data() }));
+    cb(items);
+  }, (err) => {
+    console.error("Erro ao ouvir presencas:", err);
+    cb([], err);
+  });
+}
+
+export async function setPresenca(jogoId, atletaId, resposta){
+  return setDoc(doc(db, "presencas", `${jogoId}_${atletaId}`), {
+    jogoId, atletaId, resposta, atualizadoEm: serverTimestamp(),
   });
 }
 

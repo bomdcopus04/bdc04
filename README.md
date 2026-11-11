@@ -86,6 +86,17 @@ service cloud.firestore {
     match /configuracoes/{id} {
       allow read, write: if emailPermitido();
     }
+
+    // Confirmação de presença: pública de propósito (o jogador não faz
+    // login). Só aceita os 4 campos esperados, uma resposta válida e o id
+    // no formato jogoId_atletaId; apagar fica restrito aos e-mails autorizados.
+    match /presencas/{id} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['jogoId', 'atletaId', 'resposta', 'atualizadoEm'])
+        && request.resource.data.resposta in ['vou', 'talvez', 'nao']
+        && id == request.resource.data.jogoId + '_' + request.resource.data.atletaId;
+      allow delete: if emailPermitido();
+    }
   }
 }
 ```
