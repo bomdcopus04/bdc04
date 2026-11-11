@@ -100,13 +100,6 @@ function extratoHtml(atleta, state, ano){
 
     const notas = notasDoAtletaNoJogo(j, atleta.id);
     const nota = avg(notas);
-    let detalheNotas = "";
-    if (state.isAuthorized && j.avaliacoesJogadores?.[atleta.id] && typeof j.avaliacoesJogadores[atleta.id].nota !== "number"){
-      const porVotante = Object.entries(j.avaliacoesJogadores[atleta.id])
-        .filter(([, x]) => typeof x?.nota === "number")
-        .map(([vid, x]) => `${escapeHtml(nomeAtleta(vid))} ${fmt1(x.nota)}`);
-      if (porVotante.length) detalheNotas = `<div style="font-size:11px; color:var(--ink-faint); margin-top:4px;">${porVotante.join(" · ")}</div>`;
-    }
 
     const linhas = [];
     (j.golsAssistencias || []).forEach(ev => {
@@ -133,7 +126,6 @@ function extratoHtml(atleta, state, ano){
             <div class="pill-num" style="font-size:20px;">${nota === null ? "—" : fmt1(nota)}</div>
           </div>
         </div>
-        ${detalheNotas}
         ${linhas.length ? `<div style="margin-top:10px; font-size:13px; display:flex; flex-direction:column; gap:4px;">${linhas.map(l => `<div>${l}</div>`).join("")}</div>` : ""}
       </div>`;
   }).join("");
