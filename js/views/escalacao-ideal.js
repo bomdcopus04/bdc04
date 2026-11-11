@@ -2,41 +2,43 @@ import { $, $$, escapeHtml, fmt1, toast, reRenderKeepingFocus } from "../utils.j
 import { mediaNotaAtleta, notasPorPosicao, jogosRealizados, ehJogador } from "../stats.js";
 import { filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
 
-// Cada formação define as linhas do campo (do ataque para o goleiro) e, para
-// cada linha, quais posições jogadas contam como candidatas e quantas vagas
-// ela tem. "4-3-2-1" tem uma linha extra (segunda linha de ataque) — por isso
-// o layout aceita qualquer número de linhas, não só as 4 originais.
+// Cada formação lista as linhas do campo (do ataque para o goleiro) e, para
+// cada linha, as vagas da esquerda para a direita. Cada vaga diz quais posições
+// jogadas podem ocupá-la: laterais nas pontas da defesa, zagueiros no centro,
+// etc. Linhas com `ordenar` misturam volantes e meias; depois de escolhidos,
+// os meias vão para as pontas e os volantes para o centro.
+const ATA = ["Atacante"], MEIO = ["Volante", "Meia"], ZAG = ["Zagueiro"], LAT = ["Lateral"], GOL = ["Goleiro"], SEG = ["Meia", "Atacante"];
 const FORMATIONS = {
   "4-3-3": [
-    { label: "Ataque", positions: ["Atacante"], slots: 3 },
-    { label: "Meio-campo", positions: ["Volante", "Meia"], slots: 3 },
-    { label: "Defesa", positions: ["Zagueiro", "Lateral"], slots: 4 },
-    { label: "Goleiro", positions: ["Goleiro"], slots: 1 },
+    { label: "Ataque", slots: [ATA, ATA, ATA] },
+    { label: "Meio-campo", slots: [MEIO, MEIO, MEIO], ordenar: true },
+    { label: "Defesa", slots: [LAT, ZAG, ZAG, LAT] },
+    { label: "Goleiro", slots: [GOL] },
   ],
   "4-4-2": [
-    { label: "Ataque", positions: ["Atacante"], slots: 2 },
-    { label: "Meio-campo", positions: ["Volante", "Meia"], slots: 4 },
-    { label: "Defesa", positions: ["Zagueiro", "Lateral"], slots: 4 },
-    { label: "Goleiro", positions: ["Goleiro"], slots: 1 },
+    { label: "Ataque", slots: [ATA, ATA] },
+    { label: "Meio-campo", slots: [MEIO, MEIO, MEIO, MEIO], ordenar: true },
+    { label: "Defesa", slots: [LAT, ZAG, ZAG, LAT] },
+    { label: "Goleiro", slots: [GOL] },
   ],
   "3-5-2": [
-    { label: "Ataque", positions: ["Atacante"], slots: 2 },
-    { label: "Meio-campo", positions: ["Volante", "Meia"], slots: 5 },
-    { label: "Defesa", positions: ["Zagueiro", "Lateral"], slots: 3 },
-    { label: "Goleiro", positions: ["Goleiro"], slots: 1 },
+    { label: "Ataque", slots: [ATA, ATA] },
+    { label: "Meio-campo", slots: [MEIO, MEIO, MEIO, MEIO, MEIO], ordenar: true },
+    { label: "Defesa", slots: [ZAG, ZAG, ZAG] },
+    { label: "Goleiro", slots: [GOL] },
   ],
   "4-3-2-1": [
-    { label: "Ataque", positions: ["Atacante"], slots: 1 },
-    { label: "Segunda linha", positions: ["Meia", "Atacante"], slots: 2 },
-    { label: "Meio-campo", positions: ["Volante", "Meia"], slots: 3 },
-    { label: "Defesa", positions: ["Zagueiro", "Lateral"], slots: 4 },
-    { label: "Goleiro", positions: ["Goleiro"], slots: 1 },
+    { label: "Ataque", slots: [ATA] },
+    { label: "Segunda linha", slots: [SEG, SEG] },
+    { label: "Meio-campo", slots: [MEIO, MEIO, MEIO], ordenar: true },
+    { label: "Defesa", slots: [LAT, ZAG, ZAG, LAT] },
+    { label: "Goleiro", slots: [GOL] },
   ],
   "3-4-3": [
-    { label: "Ataque", positions: ["Atacante"], slots: 3 },
-    { label: "Meio-campo", positions: ["Volante", "Meia"], slots: 4 },
-    { label: "Defesa", positions: ["Zagueiro", "Lateral"], slots: 3 },
-    { label: "Goleiro", positions: ["Goleiro"], slots: 1 },
+    { label: "Ataque", slots: [ATA, ATA, ATA] },
+    { label: "Meio-campo", slots: [MEIO, MEIO, MEIO, MEIO], ordenar: true },
+    { label: "Defesa", slots: [ZAG, ZAG, ZAG] },
+    { label: "Goleiro", slots: [GOL] },
   ],
 };
 
@@ -159,73 +161,70 @@ export function renderEscalacaoIdeal(root, state){
   const notasPos = notasPorPosicao(atletasConsiderados, jogosFiltrados);
   const linhas = FORMATIONS[formacaoAtual] || FORMATIONS["4-3-3"];
 
+  // Lista plana de vagas, na ordem do campo (linha a linha, esquerda p/ direita).
+  const vagas = [];
+  linhas.forEach((linha, li) => linha.slots.forEach(pos => vagas.push({ linhaIdx: li, pos })));
+  const geral = {};
+  atletasConsiderados.forEach(a => { geral[a.id] = mediaNotaAtleta(a.id, jogosFiltrados).media; });
+  const porGeral = (a, b) => {
+    const ma = geral[a.id], mb = geral[b.id];
+    if (ma !== null && mb !== null) return mb - ma;
+    if (ma !== null) return -1;
+    if (mb !== null) return 1;
+    return (a.numero ?? 999) - (b.numero ?? 999) || a.nome.localeCompare(b.nome);
+  };
+
+  const atribuido = new Array(vagas.length).fill(null); // id do atleta por vaga
   const usados = new Set();
-  const linhasResolvidas = linhas.map(linha => {
-    const candidatosPorAtleta = {};
-    atletasConsiderados.forEach(atleta => {
-      const porPosicao = notasPos[atleta.id];
-      if (!porPosicao) return;
-      linha.positions.forEach(pos => {
-        const stat = porPosicao[pos];
-        if (!stat) return;
-        const atual = candidatosPorAtleta[atleta.id];
-        if (!atual || stat.media > atual.media){
-          candidatosPorAtleta[atleta.id] = { atleta, posicaoJogada: pos, media: stat.media, qtd: stat.qtd };
-        }
-      });
-    });
 
-    const ordenados = Object.values(candidatosPorAtleta).sort((a, b) => b.media - a.media);
-    const titulares = [];
-    for (const c of ordenados){
-      if (titulares.length >= linha.slots) break;
-      if (usados.has(c.atleta.id)) continue; // cada atleta só ocupa uma vaga na escalação ideal
-      titulares.push(c);
-      usados.add(c.atleta.id);
-    }
-
-    // Ainda sobraram vagas nessa linha? Preenche com jogadores selecionados
-    // que não têm avaliação nenhuma (sem votação), usando a posição cadastrada
-    // no elenco pra decidir se encaixam nessa linha — em vez de deixar "vaga
-    // em aberto" quando na verdade tem gente disponível pra posição.
-    if (titulares.length < linha.slots){
-      const semVotacao = atletasConsiderados
-        .filter(a => !usados.has(a.id) && linha.positions.includes(a.posicao))
-        .sort((a, b) => (a.numero ?? 999) - (b.numero ?? 999) || a.nome.localeCompare(b.nome));
-      for (const atleta of semVotacao){
-        if (titulares.length >= linha.slots) break;
-        titulares.push({ atleta, posicaoJogada: atleta.posicao, media: null, qtd: 0 });
-        usados.add(atleta.id);
-      }
-    }
-
-    return { linha, titulares };
+  // 1ª regra: nota na posição em que o jogador foi escalado nos jogos. Todos
+  // os pares (vaga, jogador) com nota nessa posição, do melhor para o pior.
+  const pares = [];
+  vagas.forEach((v, vi) => atletasConsiderados.forEach(a => {
+    const porPosicao = notasPos[a.id];
+    if (!porPosicao) return;
+    let melhor = null;
+    v.pos.forEach(p => { const st = porPosicao[p]; if (st && (!melhor || st.media > melhor)) melhor = st.media; });
+    if (melhor !== null) pares.push({ vi, id: a.id, media: melhor });
+  }));
+  pares.sort((x, y) => y.media - x.media);
+  pares.forEach(p => {
+    if (atribuido[p.vi] || usados.has(p.id)) return;
+    atribuido[p.vi] = p.id; usados.add(p.id);
   });
 
-  // Terceira e última tentativa: se mesmo depois das duas regras acima ainda
-  // sobrar vaga em alguma linha (ex: sobrou um jogador cadastrado numa
-  // posição que essa formação nem usa, tipo um Zagueiro quando as posições
-  // de defesa já couberam todas), preenche com quem ainda não entrou no
-  // time, na ordem: maior nota geral primeiro (joga fora de posição, mas
-  // prioriza o melhor jogador disponível), depois número da camisa. Só fica
-  // "Vaga em aberto" se realmente não sobrar mais ninguém selecionado — ou
-  // seja, você escolheu menos jogadores do que vagas tem a formação (11).
-  const sobrando = atletasConsiderados
-    .filter(a => !usados.has(a.id))
-    .sort((a, b) => {
-      const mediaA = mediaNotaAtleta(a.id, jogosFiltrados).media;
-      const mediaB = mediaNotaAtleta(b.id, jogosFiltrados).media;
-      if (mediaA !== null && mediaB !== null) return mediaB - mediaA;
-      if (mediaA !== null) return -1;
-      if (mediaB !== null) return 1;
-      return (a.numero ?? 999) - (b.numero ?? 999) || a.nome.localeCompare(b.nome);
-    });
-  linhasResolvidas.forEach(({ linha, titulares }) => {
-    while (titulares.length < linha.slots && sobrando.length > 0){
-      const atleta = sobrando.shift();
-      titulares.push({ atleta, posicaoJogada: atleta.posicao, media: null, qtd: 0 });
-      usados.add(atleta.id);
+  // 2ª regra: vagas que sobraram vão para quem tem aquela posição no cadastro.
+  vagas.forEach((v, vi) => {
+    if (atribuido[vi]) return;
+    const cand = atletasConsiderados.filter(a => !usados.has(a.id) && v.pos.includes(a.posicao)).sort(porGeral)[0];
+    if (cand){ atribuido[vi] = cand.id; usados.add(cand.id); }
+  });
+
+  // 3ª regra: ainda sobrou vaga? Entra quem restou (fora de posição), pelo
+  // melhor desempenho geral. Só fica "Vaga em aberto" se houver menos de 11 jogadores.
+  const sobrando = atletasConsiderados.filter(a => !usados.has(a.id)).sort(porGeral);
+  vagas.forEach((v, vi) => {
+    if (atribuido[vi] || sobrando.length === 0) return;
+    const a = sobrando.shift();
+    atribuido[vi] = a.id; usados.add(a.id);
+  });
+
+  // Linhas de meio-campo: meias nas pontas, volantes no centro.
+  let inicio = 0;
+  linhas.forEach(linha => {
+    const n = linha.slots.length;
+    if (linha.ordenar){
+      const ids = atribuido.slice(inicio, inicio + n);
+      const rotulo = (id) => id ? melhorParaLinha(id, { positions: linha.slots[0] }, notasPos, atletasConsiderados, jogosFiltrados).posicaoJogada : "";
+      const meias = ids.filter(id => rotulo(id) === "Meia");
+      const outros = ids.filter(id => id && rotulo(id) !== "Meia");
+      const vazios = ids.filter(id => !id);
+      let novo;
+      if (meias.length >= 2) novo = [meias[0], ...outros, ...meias.slice(2), ...vazios, meias[1]];
+      else novo = [...meias, ...outros, ...vazios];
+      novo.forEach((id, i) => { atribuido[inicio + i] = id; });
     }
+    inicio += n;
   });
 
   const temDados = Object.keys(notasPos).length > 0;
@@ -233,23 +232,18 @@ export function renderEscalacaoIdeal(root, state){
   // O arranjo manual (ordem) guarda 1 entrada por vaga do campo — se ainda
   // não existe (primeira vez, ou formação/filtro/seleção acabou de mudar),
   // começa igual à sugestão automática calculada acima.
-  if (!ordem){
-    ordem = [];
-    linhasResolvidas.forEach(({ linha, titulares }) => {
-      for (let i = 0; i < linha.slots; i++) ordem.push(titulares[i] ? titulares[i].atleta.id : null);
-    });
-  }
+  if (!ordem) ordem = [...atribuido];
   const linhasHtml = (() => {
     let cursor = 0;
     return linhas.map(linha => {
       const cards = [];
-      for (let i = 0; i < linha.slots; i++){
+      for (let i = 0; i < linha.slots.length; i++){
         const slotIdx = cursor + i;
         const atletaId = ordem[slotIdx];
         const selecionada = selecionadoIdx === slotIdx;
         if (atletaId){
           const atleta = atletasConsiderados.find(a => a.id === atletaId) || atletasElenco.find(a => a.id === atletaId);
-          const info = melhorParaLinha(atletaId, linha, notasPos, atletasConsiderados, jogosFiltrados);
+          const info = melhorParaLinha(atletaId, { positions: linha.slots[i] }, notasPos, atletasConsiderados, jogosFiltrados);
           cards.push(`
             <div class="pitch-player${selecionada ? " selecionado" : ""}" data-slot-idx="${slotIdx}" title="Toque pra trocar de posição">
               <div class="dot">${atleta?.numero ?? "•"}</div>
@@ -264,7 +258,7 @@ export function renderEscalacaoIdeal(root, state){
             </div>`);
         }
       }
-      cursor += linha.slots;
+      cursor += linha.slots.length;
       return `<div class="pitch-line-players">${cards.join("")}</div>`;
     }).join("");
   })();
@@ -293,10 +287,10 @@ export function renderEscalacaoIdeal(root, state){
       </button>
     </div>
     <p style="font-size:13px; color:var(--ink-soft); margin:-14px 0 20px; max-width:640px;">
-      Calculada a partir da nota média de cada atleta nas avaliações pós-jogo, agrupada pela posição em que
-      ele efetivamente jogou em cada partida (não a posição cadastrada no elenco). Sem nota suficiente pra
-      uma posição, usa a posição cadastrada como critério; e, em último caso, preenche com quem sobrar entre
-      os selecionados — só fica vaga em aberto se você selecionar menos de 11 jogadores.
+      Calculada pela nota média de cada atleta na posição em que ele foi escalado nas partidas (não a posição
+      cadastrada). Cada vaga usa primeiro quem tem nota jogando naquela posição; se sobrar vaga, usa a posição
+      cadastrada no elenco; e, por último, preenche com quem restar — só fica vaga em aberto se você
+      selecionar menos de 11 jogadores. Laterais ficam nas pontas da defesa e zagueiros no centro.
     </p>
 
     <div class="form-grid" style="margin-bottom:20px; max-width:680px;">
