@@ -28,21 +28,22 @@ function jogoFields(state){
   ];
 }
 
-function openJogoForm(state, item, onSaved){
+function openJogoForm(state, item, onSaved, prefill){
   if (state.adversarios.length === 0 || state.campos.length === 0){
     toast("Cadastre ao menos 1 adversário e 1 campo antes de criar um jogo.", "err");
     return;
   }
   const fields = jogoFields(state);
   const isEdit = !!item;
+  const valores = item || prefill || null;
   openModal(`
     <div class="modal-head">
-      <h3>${isEdit ? "Editar jogo" : "Novo jogo"}</h3>
+      <h3>${isEdit ? "Editar jogo" : prefill ? "Duplicar jogo" : "Novo jogo"}</h3>
       <button class="modal-close" data-close>&times;</button>
     </div>
     <div class="modal-body">
       <form id="jogo-form">
-        <div class="form-grid">${fields.map(f => fieldHtml(f, item)).join("")}</div>
+        <div class="form-grid">${fields.map(f => fieldHtml(f, valores)).join("")}</div>
         <div class="form-actions" style="justify-content:space-between;">
           ${isEdit ? `<button type="button" class="btn btn-danger" id="btn-delete-jogo">Excluir jogo</button>` : `<span></span>`}
           <div style="display:flex; gap:8px;">
@@ -190,6 +191,7 @@ export function renderJogoDetail(root, state, jogoId){
         <h1 style="margin-top:4px;">Bom D' Copus vs ${escapeHtml(adv?.nome || "?")}</h1>
       </div>
       <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost" id="btn-dup-jogo">Duplicar</button>
         <button class="btn btn-ghost" id="btn-edit-jogo">Editar dados</button>
       </div>
     </div>
@@ -236,6 +238,12 @@ export function renderJogoDetail(root, state, jogoId){
   }));
 
   $("#btn-edit-jogo").addEventListener("click", () => openJogoForm(state, jogo));
+  // Duplicar: reaproveita adversário, campo, tipo e observações; o resto
+  // (placar, escalação, gols, notas) começa vazio, como um jogo novo agendado.
+  $("#btn-dup-jogo").addEventListener("click", () => openJogoForm(state, null, (newId) => { location.hash = `#jogos/${newId}`; }, {
+    data: todayISO(), status: "agendado", adversarioId: jogo.adversarioId, campoId: jogo.campoId,
+    tipoPartida: "Amistoso", observacoes: jogo.observacoes || "",
+  }));
 
   wireEscalacaoPanel(root, jogo, "escalacaoInicial", "[data-panel='escalacao-inicial']");
   wireEscalacaoPanel(root, jogo, "escalacaoFinal", "[data-panel='escalacao-final']");
