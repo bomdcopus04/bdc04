@@ -260,6 +260,9 @@ tbody tr.clickable{cursor:pointer;}
 .saldo-hero .val.negativo{color:#ff8a80;}
 .saldo-hero > div{position:relative;}
 
+.atleta-link{cursor:pointer;}
+.atleta-link:hover{color:var(--accent); text-decoration:underline;}
+
 .mes-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-bottom:8px;}
 .mes-tile{
   background:var(--card); border:1px solid var(--line); border-radius:var(--radius-sm);

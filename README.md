@@ -156,7 +156,9 @@ js/views/*.js           uma view por tela (dashboard, jogos, cadastros, avaliaca
 
 ## Navegação pública x protegida
 
-- **Públicas (sem login):** Dashboard, Ranking, Escalação ideal e Histórico.
+- **Públicas (sem login):** Dashboard e o hub Relatórios (Ranking, Extrato do
+  jogador, Escalação ideal e Histórico; clicar no nome de um atleta no Ranking
+  abre o extrato dele).
   Qualquer pessoa com o link consegue abrir e ver os dados. Dashboard e
   Histórico têm filtros de Ano/Mês sincronizados entre si (mudar o período
   numa tela mantém a seleção ao navegar para a outra).

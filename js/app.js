@@ -10,6 +10,8 @@ import { renderJogosList, renderJogoDetail } from "./views/jogos.js";
 import { renderAtletas, renderAdversarios, renderCampos, renderCadastrosHub } from "./views/cadastros.js";
 import { renderAvaliacao } from "./views/avaliacao.js";
 import { renderFinanceiro } from "./views/financeiro.js";
+import { renderRelatoriosHub } from "./views/relatorios.js";
+import { renderExtrato } from "./views/extrato.js";
 
 const state = {
   adversarios: [], campos: [], atletas: [], jogos: [], financeiro: [], configFinanceiro: null,
@@ -45,6 +47,7 @@ const ROUTES = {
   avaliacao: renderAvaliacao,
   cadastros: renderCadastrosHub,
   financeiro: renderFinanceiro,
+  relatorios: renderRelatoriosHub,
 };
 
 const PROTECTED_ROUTES = new Set(["jogos", "atletas", "adversarios", "campos", "avaliacao", "cadastros", "financeiro"]);
@@ -148,7 +151,10 @@ function render(){
   // menu continua marcado como ativo quando o usuário está em qualquer uma
   // dessas subtelas, não só na tela do hub em si.
   const CADASTROS_SUBROTAS = new Set(["atletas", "adversarios", "campos", "jogos"]);
-  const routeAtiva = CADASTROS_SUBROTAS.has(route) ? "cadastros" : route;
+  // Mesma ideia pro hub "Relatórios" (Ranking, Escalação ideal, Histórico, Extrato).
+  const RELATORIOS_SUBROTAS = new Set(["ranking", "escalacao-ideal", "historico", "extrato"]);
+  const routeAtiva = CADASTROS_SUBROTAS.has(route) ? "cadastros"
+    : RELATORIOS_SUBROTAS.has(route) ? "relatorios" : route;
   $$(".nav-link[data-route]").forEach(a => a.classList.toggle("active", a.dataset.route === routeAtiva));
 
   const root = $("#view-root");
@@ -163,6 +169,7 @@ function render(){
     else renderJogosList(root, state);
     return;
   }
+  if (route === "extrato"){ renderExtrato(root, state, subId); return; }
   const fn = ROUTES[route];
   if (fn) fn(root, state);
   else renderDashboard(root, state);

@@ -143,7 +143,7 @@ export function renderRanking(root, state){
   const rows = listaFinal.map((s, i) => `
     <tr>
       <td class="pill-num">${i + 1}º</td>
-      <td><strong>${escapeHtml(s.atleta.nome)}</strong></td>
+      <td><strong class="atleta-link" data-atleta="${s.atleta.id}" title="Ver extrato">${escapeHtml(s.atleta.nome)}</strong></td>
       <td>${escapeHtml(s.atleta.posicao || "—")}</td>
       <td class="pill-num">${s.jogosCount}</td>
       <td class="pill-num">${s.gols}</td>
@@ -224,6 +224,10 @@ export function renderRanking(root, state){
   $("#filtro-ano", root)?.addEventListener("change", (e) => { filtroAno = e.target.value; reRenderKeepingFocus(root, () => renderRanking(root, state)); });
   $("#filtro-mes", root)?.addEventListener("change", (e) => { filtroMes = e.target.value; reRenderKeepingFocus(root, () => renderRanking(root, state)); });
   $("#filtro-partida", root)?.addEventListener("change", (e) => { filtroPartida = e.target.value; reRenderKeepingFocus(root, () => renderRanking(root, state)); });
+
+  $$(".atleta-link", root).forEach(el => {
+    el.addEventListener("click", () => { location.hash = `#extrato/${el.dataset.atleta}`; });
+  });
 
   $$(".votante-btn", root).forEach(btn => {
     btn.addEventListener("click", () => {
