@@ -4,6 +4,7 @@ import { fieldHtml, collectFormData, POSICOES } from "./cadastros.js";
 import { resultadoJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida } from "../stats.js";
 
 import { linkPresenca } from "./presenca.js";
+import { openFlyerModal } from "./flyer.js";
 
 export const TIPOS_PARTIDA = ["Amistoso", "Festival", "Campeonato"];
 
@@ -214,6 +215,7 @@ export function renderJogoDetail(root, state, jogoId){
         <h1 style="margin-top:4px;">Bom D' Copus vs ${escapeHtml(adv?.nome || "?")}</h1>
       </div>
       <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost" id="btn-flyer">Gerar imagem</button>
         <button class="btn btn-ghost" id="btn-presenca-link">Copiar link de presença</button>
         <button class="btn btn-ghost" id="btn-presenca">Ver presença</button>
         <button class="btn btn-ghost" id="btn-dup-jogo">Duplicar</button>
@@ -263,6 +265,7 @@ export function renderJogoDetail(root, state, jogoId){
   }));
 
   $("#btn-edit-jogo").addEventListener("click", () => openJogoForm(state, jogo));
+  $("#btn-flyer").addEventListener("click", () => openFlyerModal(state, jogo));
   $("#btn-presenca").addEventListener("click", () => { location.hash = `#presenca/${jogo.id}`; });
   $("#btn-presenca-link").addEventListener("click", async () => {
     try{ await navigator.clipboard.writeText(linkPresenca(jogo.id)); toast("Link de presença copiado.", "ok"); }
