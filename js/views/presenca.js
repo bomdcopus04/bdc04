@@ -57,6 +57,16 @@ function desenhar(root, state, jogoId){
     .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
   const respostaDe = new Map(presencas.map(p => [p.atletaId, p.resposta]));
 
+  const quandoDe = new Map(presencas.map(p => [p.atletaId, p.atualizadoEm]));
+  const quando = (id) => {
+    const t = quandoDe.get(id);
+    const d = t && typeof t.toDate === "function" ? t.toDate() : null;
+    if (!d) return "";
+    const dia = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
+    const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+    return `Respondeu em ${dia} às ${hora}`;
+  };
+
   const cont = { vou: 0, talvez: 0, nao: 0, sem: 0 };
   jogadores.forEach(a => { const r = respostaDe.get(a.id); if (cont[r] !== undefined) cont[r]++; else cont.sem++; });
 
@@ -68,7 +78,10 @@ function desenhar(root, state, jogoId){
       <button class="btn btn-sm ${atual === r.key ? "btn-primary" : "btn-ghost"}" data-atleta="${a.id}" data-resp="${r.key}" ${aberto ? "" : "disabled"}>${r.icon} ${r.label}</button>`).join("");
     return `
       <div class="card card-pad" style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-        <strong>${escapeHtml(a.nome)}</strong>
+        <div>
+          <strong>${escapeHtml(a.nome)}</strong>
+          ${quando(a.id) ? `<div style="font-size:11.5px; color:var(--ink-faint);">${quando(a.id)}</div>` : ""}
+        </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">${botoes}</div>
       </div>`;
   }).join("");
