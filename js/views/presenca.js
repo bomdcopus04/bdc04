@@ -139,17 +139,21 @@ function desenhar(root, state, jogoId){
     try{ await navigator.clipboard.writeText(texto); toast(msg, "ok"); }
     catch(e){ toast("Não foi possível copiar.", "err"); }
   };
-  $("#btn-copiar-convite", root)?.addEventListener("click", () => copiar(
-    `⚽ *Bom D' Copus vs ${adv}*\n🗓️ ${formatDateLong(jogo.data)}${jogo.horario ? `\n⏰ ${jogo.horario}` : ""}${campo ? `\n📍 ${campo}` : ""}\n\nConfirme sua presença pelo link:\n${linkPresenca(jogoId)}`,
-    "Convite copiado."));
-  $("#btn-copiar-pendentes", root)?.addEventListener("click", () => {
-    const pend = jogadores.filter(a => !respostaDe.has(a.id)).map(a => `• ${a.nome}`);
+  // Dados da partida, no mesmo padrão das duas mensagens (convite e cobrança).
+  const dadosPartida = () => {
     const dados = [`🆚 Bom D' Copus x ${adv}`, `📅 ${formatDateLong(jogo.data)}`];
     if (jogo.horario) dados.push(`⏰ ${jogo.horario}`);
     if (campo) dados.push(`📍 ${campo}`);
     if (jogo.tipoPartida) dados.push(`🏷️ ${jogo.tipoPartida}`);
+    return dados.join("\n");
+  };
+  $("#btn-copiar-convite", root)?.addEventListener("click", () => copiar(
+    `⚽ Bora confirmar presença!\n\n${dadosPartida()}\n\n👉 Confirme pelo link:\n${linkPresenca(jogoId)}`,
+    "Convite copiado."));
+  $("#btn-copiar-pendentes", root)?.addEventListener("click", () => {
+    const pend = jogadores.filter(a => !respostaDe.has(a.id)).map(a => `• ${a.nome}`);
     copiar(pend.length
-      ? `⏳ Falta confirmar presença!\n\n${dados.join("\n")}\n\nAinda não responderam:\n${pend.join("\n")}\n\n👉 Confirme pelo link:\n${linkPresenca(jogoId)}`
+      ? `⏳ Falta confirmar presença!\n\n${dadosPartida()}\n\nAinda não responderam:\n${pend.join("\n")}\n\n👉 Confirme pelo link:\n${linkPresenca(jogoId)}`
       : "Todo mundo já respondeu! ✅", "Lista copiada.");
   });
 }
