@@ -11,6 +11,8 @@ export const TIPOS_PARTIDA = ["Amistoso", "Festival", "Campeonato"];
 let activeTab = "escalacao-inicial";
 let lastJogoId = null;
 let searchJogos = "";
+// Índice do evento de gol/assistência em edição (null = formulário de novo evento).
+let editandoEvt = null;
 
 // Presenças do jogo aberto (alimenta a escalação: só confirmados aparecem
 // por padrão). Escuta só enquanto o usuário está nesta tela de detalhe.
@@ -182,7 +184,7 @@ export function renderJogosList(root, state){
 // ============================================================================
 
 export function renderJogoDetail(root, state, jogoId){
-  if (jogoId !== lastJogoId){ activeTab = "escalacao-inicial"; lastJogoId = jogoId; }
+  if (jogoId !== lastJogoId){ activeTab = "escalacao-inicial"; lastJogoId = jogoId; editandoEvt = null; }
 
   if (presJogoId !== jogoId){
     if (presUnsub) presUnsub();
@@ -280,7 +282,7 @@ export function renderJogoDetail(root, state, jogoId){
 
   wireEscalacaoPanel(root, jogo, "escalacaoInicial", "[data-panel='escalacao-inicial']", presencasJogo);
   wireEscalacaoPanel(root, jogo, "escalacaoFinal", "[data-panel='escalacao-final']", presencasJogo);
-  wireGolsPanel(root, jogo, state.atletas);
+  wireGolsPanel(root, jogo, state.atletas, () => renderJogoDetail(root, state, jogoId));
   wireAvaliacoesPanel(root, jogo);
 }
 
@@ -469,25 +471,41 @@ function wireEscalacaoPanel(root, jogo, field, panelSel, presencas){
 
 function renderGolsPanel(jogo, atletas){
   const eventos = jogo.golsAssistencias || [];
+  if (editandoEvt !== null && !eventos[editandoEvt]) editandoEvt = null;
+  const ed = editandoEvt !== null ? eventos[editandoEvt] : null;
   const nome = id => id === GOL_CONTRA_ID ? "Gol contra (adversário)" : escapeHtml(atletas.find(a => a.id === id)?.nome || "?");
   const rows = eventos.map((e, idx) => {
     const meta = [e.tipoGol, e.tempo].filter(Boolean).map(escapeHtml).join(" · ");
     return `
-    <div class="event-row">
+    <div class="event-row" ${idx === editandoEvt ? `style="background:var(--gold-soft, rgba(228,182,43,.16)); border-radius:8px;"` : ""}>
       <span class="event-min">${e.minuto ?? "–"}'</span>
       <span>⚽ ${nome(e.atletaGolId)}${e.atletaAssistId ? ` <span style="color:var(--ink-soft);">(assist. ${nome(e.atletaAssistId)})</span>` : ""}${meta ? ` <span style="color:var(--ink-faint); font-size:11px;">— ${meta}</span>` : ""}</span>
-      <button class="btn btn-ghost btn-sm" style="margin-left:auto;" data-remove-evt="${idx}">Remover</button>
+      <span style="margin-left:auto; display:flex; gap:6px;">
+        <button class="btn btn-ghost btn-sm" data-edit-evt="${idx}">Editar</button>
+        <button class="btn btn-ghost btn-sm" data-remove-evt="${idx}">Remover</button>
+      </span>
     </div>`;
   }).join("");
 
   // Só oferece os jogadores escalados nessa partida (inicial ou final) — evita
   // rolar a lista inteira do elenco pra achar quem jogou. Se a escalação ainda
   // não foi preenchida, cai pro elenco completo pra não travar o cadastro do gol.
+  // Ao editar, garante que quem já está no evento continua nas opções.
   const escalados = jogadoresDaPartida(jogo, atletas);
-  const poolJogadores = escalados.length > 0 ? escalados : atletas.filter(ehJogador);
-  const options = poolJogadores.map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join("");
-  const tipoGolOptions = TIPOS_GOL.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
-  const tempoOptions = TEMPOS_JOGO.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+  let pool = escalados.length > 0 ? escalados : atletas.filter(ehJogador);
+  if (ed){
+    [ed.atletaGolId, ed.atletaAssistId].forEach(id => {
+      if (id && id !== GOL_CONTRA_ID && !pool.some(a => a.id === id)){
+        const a = atletas.find(x => x.id === id);
+        if (a) pool = [...pool, a];
+      }
+    });
+  }
+  const sel = (v, atual) => (atual && v === atual ? "selected" : "");
+  const options = (atual) => pool.map(a => `<option value="${a.id}" ${sel(a.id, atual)}>${escapeHtml(a.nome)}</option>`).join("");
+  const tipoGolOptions = TIPOS_GOL.map(t => `<option value="${escapeHtml(t)}" ${sel(t, ed?.tipoGol)}>${escapeHtml(t)}</option>`).join("");
+  const tempoOptions = TEMPOS_JOGO.map(t => `<option value="${escapeHtml(t)}" ${sel(t, ed?.tempo)}>${escapeHtml(t)}</option>`).join("");
+  const contra = ed?.atletaGolId === GOL_CONTRA_ID;
 
   return `
     <div class="card card-pad">
@@ -495,18 +513,22 @@ function renderGolsPanel(jogo, atletas){
       <div class="card-sub">${eventos.length} evento(s) registrado(s)</div>
       ${rows || `<p style="color:var(--ink-faint); font-size:13px;">Nenhum gol registrado ainda.</p>`}
       <div class="form-grid" style="margin-top:18px; padding-top:16px; border-top:1px solid var(--line);">
-        <div class="field"><label>Gol de</label><select id="evt-gol"><option value="">Selecione</option><option value="${GOL_CONTRA_ID}">⚽ Gol contra (adversário)</option>${options}</select></div>
-        <div class="field"><label>Assistência de (opcional)</label><select id="evt-assist"><option value="">Sem assistência</option>${options}</select></div>
-        <div class="field"><label>Minuto</label><input type="number" id="evt-min" min="0" max="150" placeholder="ex: 34"></div>
+        ${ed ? `<div class="field span-2"><strong style="font-size:13px;">Editando o evento ${editandoEvt + 1}</strong></div>` : ""}
+        <div class="field"><label>Gol de</label><select id="evt-gol"><option value="">Selecione</option><option value="${GOL_CONTRA_ID}" ${contra ? "selected" : ""}>⚽ Gol contra (adversário)</option>${options(ed?.atletaGolId)}</select></div>
+        <div class="field"><label>Assistência de (opcional)</label><select id="evt-assist" ${contra ? "disabled" : ""}><option value="">Sem assistência</option>${options(ed?.atletaAssistId)}</select></div>
+        <div class="field"><label>Minuto</label><input type="number" id="evt-min" min="0" max="150" placeholder="ex: 34" value="${ed?.minuto ?? ""}"></div>
         <div class="field"><label>Como foi o gol (opcional)</label><select id="evt-tipo"><option value="">Selecione</option>${tipoGolOptions}</select></div>
         <div class="field"><label>Qual tempo (opcional)</label><select id="evt-tempo"><option value="">Selecione</option>${tempoOptions}</select></div>
       </div>
-      <div class="form-actions"><button class="btn btn-primary" id="btn-add-evt">+ Adicionar evento</button></div>
+      <div class="form-actions">
+        ${ed ? `<button class="btn btn-ghost" id="btn-cancel-evt">Cancelar edição</button>` : ""}
+        <button class="btn btn-primary" id="btn-add-evt">${ed ? "Salvar alterações" : "+ Adicionar evento"}</button>
+      </div>
     </div>
   `;
 }
 
-function wireGolsPanel(root, jogo, atletas){
+function wireGolsPanel(root, jogo, atletas, rerender){
   const panel = $("[data-panel='gols']", root);
   if (!panel) return;
   $$("[data-remove-evt]", panel).forEach(btn => {
@@ -514,12 +536,25 @@ function wireGolsPanel(root, jogo, atletas){
       const idx = Number(btn.dataset.removeEvt);
       const eventos = [...(jogo.golsAssistencias || [])];
       eventos.splice(idx, 1);
+      // Se estava editando esse evento (ou um anterior), o índice muda — sai da edição.
+      editandoEvt = null;
       try{
         await updateJogoField(jogo.id, { golsAssistencias: eventos });
         toast("Evento removido.", "ok");
       }catch(err){ toast("Erro: " + err.message, "err"); }
     });
   });
+  // Editar: carrega o evento no formulário logo abaixo da lista.
+  $$("[data-edit-evt]", panel).forEach(btn => {
+    btn.addEventListener("click", () => {
+      editandoEvt = Number(btn.dataset.editEvt);
+      rerender();
+      const alvo = document.querySelector("[data-panel='gols'] #evt-gol");
+      alvo?.scrollIntoView({ behavior: "smooth", block: "center" });
+      alvo?.focus({ preventScroll: true });
+    });
+  });
+  $("#btn-cancel-evt", panel)?.addEventListener("click", () => { editandoEvt = null; rerender(); });
   // Gol contra não tem assistência do próprio time — desabilita o campo pra evitar dado inconsistente.
   const golSel = $("#evt-gol", panel);
   const assistSel = $("#evt-assist", panel);
@@ -539,13 +574,17 @@ function wireGolsPanel(root, jogo, atletas){
     if (!golId){ toast("Selecione quem fez o gol.", "err"); return; }
     if (assistId && assistId === golId){ toast("O autor do gol e da assistência não podem ser o mesmo atleta.", "err"); return; }
     if (golId === GOL_CONTRA_ID && assistId){ toast("Gol contra não tem assistência.", "err"); return; }
-    const eventos = [...(jogo.golsAssistencias || []), {
+    const novo = {
       atletaGolId: golId, atletaAssistId: assistId || null, minuto: minuto ? Number(minuto) : null,
       tipoGol: tipoGol || null, tempo: tempo || null,
-    }];
+    };
+    const atuais = [...(jogo.golsAssistencias || [])];
+    const editando = editandoEvt !== null && atuais[editandoEvt];
+    const eventos = editando ? atuais.map((e, i) => i === editandoEvt ? { ...e, ...novo } : e) : [...atuais, novo];
+    editandoEvt = null;
     try{
       await updateJogoField(jogo.id, { golsAssistencias: eventos });
-      toast("Evento adicionado.", "ok");
+      toast(editando ? "Evento atualizado." : "Evento adicionado.", "ok");
     }catch(err){ toast("Erro: " + err.message, "err"); }
   });
 }
