@@ -380,6 +380,181 @@ function openMesesTodos(state){
 }
 
 // ----------------------------------------------------------------------------
+// Pendências — quem está devendo mensalidade, mês a mês (de MES_INICIO até o
+// mês atual), convertido em valor com a mensalidade atual. Gera uma mensagem
+// pronta pra mandar na diretoria.
+// ----------------------------------------------------------------------------
+function pendenciasPorMes(state){
+  const transacoes = state.financeiro || [];
+  const pagantes = (state.atletas || []).filter(a => a.pagante && a.ativo !== false)
+    .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+  const pagou = (mesRef, atletaId) => transacoes.some(t => t.tipo === "mensalidade" && t.mesRef === mesRef && t.atletaId === atletaId);
+  return mesesEntre(MES_INICIO, mesAtualRef()).map(mes => ({
+    mes,
+    pendentes: pagantes.filter(a => !pagou(mes, a.id)),
+    pagos: pagantes.filter(a => pagou(mes, a.id)).length,
+  }));
+}
+
+function saldoAtual(transacoes){
+  return transacoes.reduce((acc, t) => t.tipo === "saida" ? acc - (t.valor || 0) : acc + (t.valor || 0), 0);
+}
+
+function textoPendencias(state){
+  const valor = state.configFinanceiro?.valorMensalidade ?? 0;
+  const meses = pendenciasPorMes(state);
+  const atual = mesAtualRef();
+  const comPendencia = meses.filter(m => m.pendentes.length > 0);
+  const totalQtd = comPendencia.reduce((s, m) => s + m.pendentes.length, 0);
+  const linhas = [`📊 *Mensalidades pendentes — Bom D' Copus*`, `Posição em ${formatDate(todayISO())}`, ""];
+  if (!comPendencia.length){
+    linhas.push("✅ Nenhuma mensalidade pendente.");
+  } else {
+    comPendencia.forEach(m => {
+      linhas.push(`*${mesLabel(m.mes)}${m.mes === atual ? " (mês atual)" : ""}* — ${m.pendentes.length} pendente${m.pendentes.length > 1 ? "s" : ""} (${fmtBRL(m.pendentes.length * valor)})`);
+      m.pendentes.forEach(a => linhas.push(`• ${a.nome}`));
+      linhas.push("");
+    });
+    linhas.push(`💰 *Total pendente: ${fmtBRL(totalQtd * valor)}* (${totalQtd} mensalidade${totalQtd > 1 ? "s" : ""})`);
+  }
+  linhas.push(`🏦 *Saldo atual do caixa: ${fmtBRL(saldoAtual(state.financeiro || []))}*`, `Valor da mensalidade: ${fmtBRL(valor)}`);
+  return linhas.join("\n");
+}
+
+function openPendencias(state){
+  const valor = state.configFinanceiro?.valorMensalidade ?? 0;
+  const meses = pendenciasPorMes(state).filter(m => m.pendentes.length > 0).reverse();
+  const totalQtd = meses.reduce((s, m) => s + m.pendentes.length, 0);
+  const blocos = meses.map(m => `
+    <div class="card card-pad" style="margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:6px;">
+        <strong>${mesLabel(m.mes)}${m.mes === mesAtualRef() ? " <span style='font-weight:400; color:var(--ink-soft);'>(mês atual)</span>" : ""}</strong>
+        <span style="font-family:var(--font-mono); font-weight:700; color:var(--danger);">${m.pendentes.length} pendente${m.pendentes.length > 1 ? "s" : ""} · ${fmtBRL(m.pendentes.length * valor)}</span>
+      </div>
+      <div style="font-size:13px; color:var(--ink-soft);">${m.pendentes.map(a => escapeHtml(a.nome)).join(", ")}</div>
+    </div>`).join("");
+
+  openModal(`
+    <div class="modal-head">
+      <h3>Mensalidades pendentes</h3>
+      <button class="modal-close" data-close>&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="card card-pad" style="margin-bottom:12px;">
+        <div class="card-sub" style="margin-bottom:2px;">Total pendente (${totalQtd} mensalidade${totalQtd === 1 ? "" : "s"} × ${fmtBRL(valor)})</div>
+        <div style="font-family:var(--font-mono); font-size:26px; font-weight:700; color:${totalQtd ? "var(--danger)" : "var(--ok)"};">${fmtBRL(totalQtd * valor)}</div>
+        <div class="card-sub" style="margin:6px 0 0;">Saldo atual do caixa: <strong>${fmtBRL(saldoAtual(state.financeiro || []))}</strong></div>
+      </div>
+      ${blocos || `<p style="color:var(--ink-faint); font-style:italic;">Nenhuma mensalidade pendente. 🎉</p>`}
+      <p class="field-hint">Considera os jogadores pagantes ativos, de ${mesLabel(MES_INICIO)} até o mês atual, e o valor atual da mensalidade.</p>
+      <div class="form-actions" style="justify-content:space-between;">
+        <button type="button" class="btn btn-ghost" id="btn-copiar-pendencias">Copiar mensagem p/ diretoria</button>
+        <button type="button" class="btn btn-primary" data-close>Fechar</button>
+      </div>
+    </div>
+  `);
+  $$("[data-close]").forEach(b => b.addEventListener("click", closeModal));
+  $("#btn-copiar-pendencias").addEventListener("click", async () => {
+    try{ await navigator.clipboard.writeText(textoPendencias(state)); toast("Mensagem copiada! Cole no WhatsApp.", "ok"); }
+    catch(err){ toast("Não foi possível copiar automaticamente.", "err"); }
+  });
+}
+
+// ----------------------------------------------------------------------------
+// Extrato financeiro de um jogador ("check-up"): mês a mês, pago ou pendente,
+// com totais e mensagem pronta pra compartilhar.
+// ----------------------------------------------------------------------------
+function extratoJogadorDados(state, atleta){
+  const valorAtual = state.configFinanceiro?.valorMensalidade ?? 0;
+  const pagas = (state.financeiro || []).filter(t => t.tipo === "mensalidade" && t.atletaId === atleta.id);
+  const porMes = Object.fromEntries(pagas.map(t => [t.mesRef, t]));
+  // Meses do controle (até o atual) + qualquer mês adiantado que ele já pagou.
+  const meses = [...new Set([...mesesEntre(MES_INICIO, mesAtualRef()), ...pagas.map(t => t.mesRef).filter(Boolean)])].sort();
+  const eLinha = atleta.pagante;
+  const linhas = meses.map(mes => {
+    const t = porMes[mes];
+    if (t) return { mes, status: "pago", valor: t.valor ?? 0, data: t.data };
+    if (mes > mesAtualRef() || !eLinha) return null;
+    return { mes, status: "pendente", valor: valorAtual };
+  }).filter(Boolean);
+  const totalPago = linhas.filter(l => l.status === "pago").reduce((s, l) => s + l.valor, 0);
+  const totalPend = linhas.filter(l => l.status === "pendente").reduce((s, l) => s + l.valor, 0);
+  return { linhas, totalPago, totalPend, qtdPagas: linhas.filter(l => l.status === "pago").length, qtdPend: linhas.filter(l => l.status === "pendente").length };
+}
+
+function textoExtrato(atleta, d){
+  const linhas = [`🧾 *Extrato financeiro — ${atleta.nome}*`, `Posição em ${formatDate(todayISO())}`, ""];
+  d.linhas.forEach(l => linhas.push(l.status === "pago"
+    ? `✅ ${mesLabel(l.mes)} — pago em ${formatDate(l.data)} (${fmtBRL(l.valor)})`
+    : `❌ ${mesLabel(l.mes)} — pendente (${fmtBRL(l.valor)})`));
+  if (!d.linhas.length) linhas.push("Sem mensalidades no período.");
+  linhas.push("", `💰 Pago: ${fmtBRL(d.totalPago)} (${d.qtdPagas} mês${d.qtdPagas === 1 ? "" : "es"})`, `⏳ Pendente: ${fmtBRL(d.totalPend)} (${d.qtdPend} mês${d.qtdPend === 1 ? "" : "es"})`);
+  return linhas.join("\n");
+}
+
+function openExtratoJogador(state){
+  const transacoes = state.financeiro || [];
+  const comPagamento = new Set(transacoes.filter(t => t.tipo === "mensalidade").map(t => t.atletaId));
+  const jogadores = (state.atletas || [])
+    .filter(a => a.posicao !== "Técnico" && (a.pagante || comPagamento.has(a.id)))
+    .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+
+  openModal(`
+    <div class="modal-head">
+      <h3>Extrato financeiro do jogador</h3>
+      <button class="modal-close" data-close>&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="max-width:340px; margin-bottom:14px;">
+        <label>Jogador</label>
+        <select id="ext-jogador">
+          <option value="">Selecione…</option>
+          ${jogadores.map(a => `<option value="${a.id}">${escapeHtml(a.nome)}${a.ativo === false ? " (inativo)" : ""}</option>`).join("")}
+        </select>
+      </div>
+      <div id="ext-corpo"><p style="color:var(--ink-faint); font-style:italic;">Escolha um jogador para ver o extrato.</p></div>
+      <div class="form-actions" style="justify-content:space-between;">
+        <button type="button" class="btn btn-ghost" id="btn-copiar-extrato" disabled>Copiar extrato</button>
+        <button type="button" class="btn btn-primary" data-close>Fechar</button>
+      </div>
+    </div>
+  `, { wide: true });
+  $$("[data-close]").forEach(b => b.addEventListener("click", closeModal));
+
+  let atual = null;
+  $("#ext-jogador").addEventListener("change", (e) => {
+    atual = jogadores.find(a => a.id === e.target.value) || null;
+    $("#btn-copiar-extrato").disabled = !atual;
+    if (!atual){ $("#ext-corpo").innerHTML = ""; return; }
+    const d = extratoJogadorDados(state, atual);
+    const rows = [...d.linhas].reverse().map(l => `
+      <tr>
+        <td>${mesLabel(l.mes)}</td>
+        <td><span class="badge ${l.status === "pago" ? "badge-ok" : "badge-danger"}">${l.status === "pago" ? "Pago" : "Pendente"}</span></td>
+        <td>${l.status === "pago" ? formatDate(l.data) : "—"}</td>
+        <td style="font-family:var(--font-mono); font-weight:700;">${fmtBRL(l.valor)}</td>
+      </tr>`).join("");
+    $("#ext-corpo").innerHTML = `
+      <div class="kpi-grid" style="margin-bottom:12px;">
+        <div class="kpi-tile"><div class="kpi-label">Pago</div><div class="kpi-value" style="font-size:22px;">${fmtBRL(d.totalPago)}</div></div>
+        <div class="kpi-tile"><div class="kpi-label">Pendente</div><div class="kpi-value" style="font-size:22px; color:${d.totalPend ? "var(--danger)" : "inherit"};">${fmtBRL(d.totalPend)}</div></div>
+        <div class="kpi-tile"><div class="kpi-label">Meses pagos</div><div class="kpi-value">${d.qtdPagas}</div></div>
+        <div class="kpi-tile"><div class="kpi-label">Meses pendentes</div><div class="kpi-value">${d.qtdPend}</div></div>
+      </div>
+      ${atual.pagante ? "" : `<p class="field-hint">Este jogador não está marcado como pagante — só aparecem os meses que ele já pagou.</p>`}
+      <div class="table-wrap"><table>
+        <thead><tr><th>Mês</th><th>Situação</th><th>Pago em</th><th>Valor</th></tr></thead>
+        <tbody>${rows || `<tr class="empty-row"><td colspan="4">Sem mensalidades no período.</td></tr>`}</tbody>
+      </table></div>`;
+  });
+  $("#btn-copiar-extrato").addEventListener("click", async () => {
+    if (!atual) return;
+    try{ await navigator.clipboard.writeText(textoExtrato(atual, extratoJogadorDados(state, atual))); toast("Extrato copiado!", "ok"); }
+    catch(err){ toast("Não foi possível copiar automaticamente.", "err"); }
+  });
+}
+
+// ----------------------------------------------------------------------------
 // Tela principal
 // ----------------------------------------------------------------------------
 export function renderFinanceiro(root, state){
@@ -444,6 +619,11 @@ export function renderFinanceiro(root, state){
       <button class="btn btn-ghost btn-sm" id="btn-editar-mensalidade" type="button">Editar valor</button>
     </div>
 
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px;">
+      <button class="btn btn-primary btn-sm" id="btn-pendencias" type="button">Pendências de mensalidade</button>
+      <button class="btn btn-ghost btn-sm" id="btn-extrato-jogador" type="button">Extrato do jogador</button>
+    </div>
+
     <div class="topbar" style="margin-bottom:12px;">
       <h2 style="font-size:18px; margin:0;">Mensalidades por mês</h2>
       <div style="display:flex; gap:8px;">
@@ -466,6 +646,8 @@ export function renderFinanceiro(root, state){
     </div>
   `;
 
+  $("#btn-pendencias", root).addEventListener("click", () => openPendencias(state));
+  $("#btn-extrato-jogador", root).addEventListener("click", () => openExtratoJogador(state));
   $("#btn-entrada", root).addEventListener("click", () => openTransacaoForm("entrada"));
   $("#btn-saida", root).addEventListener("click", () => openTransacaoForm("saida"));
   $("#btn-editar-mensalidade", root).addEventListener("click", () => openConfigMensalidadeForm(state));
