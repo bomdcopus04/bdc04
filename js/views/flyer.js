@@ -117,39 +117,6 @@ function legendaTexto(modelo, { jogo, adv, campo, resumo }){
   const advNome = adv?.nome || "Adversário";
   const linhas = [];
   const dados = [`🆚 Bom D' Copus x ${advNome}`, `📅 ${formatDateLong(jogo.data)}`];
-  if (modelo === "convite" && T.decor){
-    const t = 320;
-    const icone = (svg) => `<svg viewBox="0 0 24 24" width="92" height="92" fill="none" stroke="${DOURADO}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${svg}</svg>`;
-    const col = (ic, rot, val, tam) => `<div style="flex:1; text-align:center; padding:0 12px;">${ic}<div style="font-size:26px; letter-spacing:.3em; margin-top:14px;">${rot}</div><div style="font-size:${tam}px; font-weight:800; line-height:1.15; margin-top:6px;">${escapeHtml(val)}</div></div>`;
-    const div = `<div style="width:4px; align-self:stretch; background:${DOURADO};"></div>`;
-    const nome = (n) => `<div style="text-align:center; width:380px;"><div style="font-size:40px; letter-spacing:.16em; padding-bottom:14px; border-bottom:4px solid ${DOURADO};">${escapeHtml(n)}</div></div>`;
-    return `<div style="${base}">${cantos}
-      <div style="border:5px solid ${DOURADO}; padding:10px; margin-top:20px;">
-        <div style="border:2px solid ${DOURADO}; padding:14px 90px; font-size:104px; font-weight:900; font-style:italic; letter-spacing:.08em;">${escapeHtml(String(jogo.tipoPartida || "Amistoso").toUpperCase())}</div>
-      </div>
-      <div style="display:flex; align-items:center; justify-content:center; gap:36px;">
-        ${bdc.replace(/__T__/g, t)}
-        <div style="font-family:'Bebas Neue',sans-serif; font-size:150px; color:${DOURADO}; line-height:1;">VS</div>
-        ${escudoHtml(escudo, adv?.nome, t, T.accent)}
-      </div>
-      <div style="display:flex; justify-content:center; gap:60px;">
-        ${nome("BOM D' COPUS 04")}${nome((adv?.nome || "Adversário").toUpperCase())}
-      </div>
-      <div style="width:100%; display:flex; align-items:stretch; border-top:0;">
-        ${col(icone('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7 14h2M11 14h2M15 14h2M7 17.5h2M11 17.5h2"/>'), "DATA", formatDate(jogo.data), 52)}
-        ${div}
-        ${col(icone('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>'), "HORÁRIO", jogo.horario || "—", 52)}
-        ${div}
-        ${col(icone('<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>'), "LOCAL", campo?.nome || "A definir", 40)}
-      </div>
-      <div style="width:100%; text-align:center;">
-        <div style="display:flex; align-items:center; gap:20px;"><div style="flex:1; height:3px; background:${DOURADO};"></div><div style="width:46px; height:46px; border-radius:50%; border:3px solid ${DOURADO};"></div><div style="flex:1; height:3px; background:${DOURADO};"></div></div>
-        <div style="font-size:26px; letter-spacing:.34em; margin-top:22px;">RAÇA &nbsp;•&nbsp; UNIÃO &nbsp;•&nbsp; RESPEITO &nbsp;•&nbsp; VONTADE</div>
-        <div style="font-size:18px; color:${T.faint}; letter-spacing:.06em; margin-top:16px;">Imagem gerada pelo app Bom D' Copus</div>
-      </div>
-    </div>`;
-  }
-
   if (modelo === "convite"){
     linhas.push("Partida Confirmada! ⚽🔥", "");
     if (jogo.horario) dados.push(`⏰ ${jogo.horario}`);
@@ -200,6 +167,39 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jo
   const rodape = `<div style="font-size:20px; color:${T.faint}; letter-spacing:.06em;">Imagem gerada pelo app Bom D' Copus</div>`;
   const faixa = `<div style="width:220px; height:6px; background:${DOURADO}; border-radius:3px;"></div>`;
   const bdc = `<img src="assets/logo-bomdcopus.png" style="width:__T__px; height:__T__px; border-radius:50%; object-fit:cover; box-shadow:0 0 0 8px ${T.ring};">`;
+
+  if (modelo === "convite" && T.decor){
+    const t = 320;
+    const icone = (svg) => `<svg viewBox="0 0 24 24" width="92" height="92" fill="none" stroke="${DOURADO}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${svg}</svg>`;
+    const col = (ic, rot, val, tam) => `<div style="flex:1; text-align:center; padding:0 12px;">${ic}<div style="font-size:26px; letter-spacing:.3em; margin-top:14px;">${rot}</div><div style="font-size:${tam}px; font-weight:800; line-height:1.15; margin-top:6px;">${escapeHtml(val)}</div></div>`;
+    const div = `<div style="width:4px; align-self:stretch; background:${DOURADO};"></div>`;
+    const nome = (n) => `<div style="text-align:center; width:380px;"><div style="font-size:40px; letter-spacing:.16em; padding-bottom:14px; border-bottom:4px solid ${DOURADO};">${escapeHtml(n)}</div></div>`;
+    return `<div style="${base}">${cantos}
+      <div style="border:5px solid ${DOURADO}; padding:10px; margin-top:20px;">
+        <div style="border:2px solid ${DOURADO}; padding:14px 90px; font-size:104px; font-weight:900; font-style:italic; letter-spacing:.08em;">${escapeHtml(String(jogo.tipoPartida || "Amistoso").toUpperCase())}</div>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:center; gap:36px;">
+        ${bdc.replace(/__T__/g, t)}
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:150px; color:${DOURADO}; line-height:1;">VS</div>
+        ${escudoHtml(escudo, adv?.nome, t, T.accent)}
+      </div>
+      <div style="display:flex; justify-content:center; gap:60px;">
+        ${nome("BOM D' COPUS 04")}${nome((adv?.nome || "Adversário").toUpperCase())}
+      </div>
+      <div style="width:100%; display:flex; align-items:stretch; border-top:0;">
+        ${col(icone('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7 14h2M11 14h2M15 14h2M7 17.5h2M11 17.5h2"/>'), "DATA", formatDate(jogo.data), 52)}
+        ${div}
+        ${col(icone('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>'), "HORÁRIO", jogo.horario || "—", 52)}
+        ${div}
+        ${col(icone('<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>'), "LOCAL", campo?.nome || "A definir", 40)}
+      </div>
+      <div style="width:100%; text-align:center;">
+        <div style="display:flex; align-items:center; gap:20px;"><div style="flex:1; height:3px; background:${DOURADO};"></div><div style="width:46px; height:46px; border-radius:50%; border:3px solid ${DOURADO};"></div><div style="flex:1; height:3px; background:${DOURADO};"></div></div>
+        <div style="font-size:26px; letter-spacing:.34em; margin-top:22px;">RAÇA &nbsp;•&nbsp; UNIÃO &nbsp;•&nbsp; RESPEITO &nbsp;•&nbsp; VONTADE</div>
+        <div style="font-size:18px; color:${T.faint}; letter-spacing:.06em; margin-top:16px;">Imagem gerada pelo app Bom D' Copus</div>
+      </div>
+    </div>`;
+  }
 
   if (modelo === "convite"){
     const t = 330;
