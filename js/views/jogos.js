@@ -18,6 +18,7 @@ let searchJogos = "";
 function jogoFields(state){
   return [
     { key: "data", label: "Data", type: "date", required: true, default: todayISO() },
+    { key: "horario", label: "Horário", type: "time" },
     { key: "status", label: "Status", type: "select", options: [{ value: "agendado", label: "Agendado" }, { value: "realizado", label: "Realizado" }], default: "agendado" },
     { key: "adversarioId", label: "Adversário", type: "select", required: true, placeholder: "Selecione",
       options: state.adversarios.map(a => ({ value: a.id, label: a.nome })) },
@@ -202,7 +203,7 @@ export function renderJogoDetail(root, state, jogoId){
 
     <div class="sumula">
       <div class="sumula-side"><div class="team">Bom D' Copus</div><div class="score">${jogo.placarNos ?? "–"}</div></div>
-      <div class="sumula-mid"><div class="vs">VS</div><div class="date">${formatDateLong(jogo.data)}</div></div>
+      <div class="sumula-mid"><div class="vs">VS</div><div class="date">${formatDateLong(jogo.data)}${jogo.horario ? ` · ${escapeHtml(jogo.horario)}` : ""}</div></div>
       <div class="sumula-side"><div class="team">${escapeHtml(adv?.nome || "?")}</div><div class="score">${jogo.placarAdversario ?? "–"}</div></div>
       <div class="sumula-meta">
         <span>📍 ${escapeHtml(campo?.nome || "Campo não definido")}</span>
@@ -250,7 +251,7 @@ export function renderJogoDetail(root, state, jogoId){
   // Duplicar: reaproveita adversário, campo, tipo e observações; o resto
   // (placar, escalação, gols, notas) começa vazio, como um jogo novo agendado.
   $("#btn-dup-jogo").addEventListener("click", () => openJogoForm(state, null, (newId) => { location.hash = `#jogos/${newId}`; }, {
-    data: todayISO(), status: "agendado", adversarioId: jogo.adversarioId, campoId: jogo.campoId,
+    data: todayISO(), horario: jogo.horario || "", status: "agendado", adversarioId: jogo.adversarioId, campoId: jogo.campoId,
     tipoPartida: "Amistoso", observacoes: jogo.observacoes || "",
   }));
 

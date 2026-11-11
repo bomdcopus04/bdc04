@@ -33,6 +33,10 @@ export function fieldHtml(f, item){
     return `<div class="${spanCls}"><label>${f.label}${f.required ? " *" : ""}</label>
       <input type="number" name="${f.key}" value="${val ?? ""}" ${req} ${f.min !== undefined ? `min="${f.min}"` : ""} ${f.max !== undefined ? `max="${f.max}"` : ""}></div>`;
   }
+  if (f.type === "time"){
+    return `<div class="${spanCls}"><label>${f.label}${f.required ? " *" : ""}</label>
+      <input type="time" name="${f.key}" value="${escapeHtml(val)}" ${req}></div>`;
+  }
   if (f.type === "date"){
     return `<div class="${spanCls}"><label>${f.label}${f.required ? " *" : ""}</label>
       <input type="date" name="${f.key}" value="${escapeHtml(val)}" ${req}></div>`;

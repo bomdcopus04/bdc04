@@ -80,7 +80,7 @@ function desenhar(root, state, jogoId){
       <div>
         <div class="eyebrow">Confirmação de presença</div>
         <h1>Bom D' Copus vs ${escapeHtml(adv)}</h1>
-        <div style="font-size:13px; color:var(--ink-soft); margin-top:4px;">🗓️ ${formatDateLong(jogo.data)}${campo ? ` · 📍 ${escapeHtml(campo)}` : ""}${jogo.tipoPartida ? ` · 🏷️ ${escapeHtml(jogo.tipoPartida)}` : ""}</div>
+        <div style="font-size:13px; color:var(--ink-soft); margin-top:4px;">🗓️ ${formatDateLong(jogo.data)}${jogo.horario ? ` · ⏰ ${escapeHtml(jogo.horario)}` : ""}${campo ? ` · 📍 ${escapeHtml(campo)}` : ""}${jogo.tipoPartida ? ` · 🏷️ ${escapeHtml(jogo.tipoPartida)}` : ""}</div>
       </div>
     </div>
 
@@ -123,7 +123,7 @@ function desenhar(root, state, jogoId){
     catch(e){ toast("Não foi possível copiar.", "err"); }
   };
   $("#btn-copiar-convite", root)?.addEventListener("click", () => copiar(
-    `⚽ *Bom D' Copus vs ${adv}*\n🗓️ ${formatDateLong(jogo.data)}${campo ? `\n📍 ${campo}` : ""}\n\nConfirme sua presença pelo link:\n${linkPresenca(jogoId)}`,
+    `⚽ *Bom D' Copus vs ${adv}*\n🗓️ ${formatDateLong(jogo.data)}${jogo.horario ? `\n⏰ ${jogo.horario}` : ""}${campo ? `\n📍 ${campo}` : ""}\n\nConfirme sua presença pelo link:\n${linkPresenca(jogoId)}`,
     "Convite copiado."));
   $("#btn-copiar-pendentes", root)?.addEventListener("click", () => {
     const pend = jogadores.filter(a => !respostaDe.has(a.id)).map(a => `• ${a.nome}`);
