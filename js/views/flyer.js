@@ -154,7 +154,7 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jo
   if (modelo === "melhor"){
     const j = resumo.ranking.find(x => x.id === jogadorId) || resumo.ranking[0] || null;
     const info = j ? resumo.infoJogador(j.id) : { gols: 0, assists: 0, posicao: "" };
-    const ph = formato === "story" ? 760 : 560;
+    const ph = formato === "story" ? 700 : 470;
     const placar = jogo.placarNos !== null && jogo.placarNos !== undefined ? `${jogo.placarNos} x ${jogo.placarAdversario ?? "–"}` : "";
     const feitos = [info.gols ? `${info.gols} gol${info.gols > 1 ? "s" : ""}` : "", info.assists ? `${info.assists} assistência${info.assists > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ");
     const quadro = foto
@@ -165,7 +165,7 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jo
       <div style="font-family:'Bebas Neue',sans-serif; font-size:76px; letter-spacing:.2em; color:${DOURADO};">MELHOR DO JOGO</div>
       ${quadro}
       <div style="text-align:center;">
-        <div style="font-family:'Bebas Neue',sans-serif; font-size:128px; line-height:1; letter-spacing:.02em;">${escapeHtml((j?.nome || "Jogador").toUpperCase())}</div>
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:116px; line-height:1; letter-spacing:.02em;">${escapeHtml((j?.nome || "Jogador").toUpperCase())}</div>
         <div style="font-size:36px; color:${T.muted2}; margin-top:8px;">${escapeHtml([info.posicao, feitos].filter(Boolean).join(" · "))}</div>
       </div>
       ${j && j.nota !== null ? `<div style="border:4px solid ${DOURADO}; border-radius:26px; padding:10px 46px; text-align:center;"><div style="font-size:24px; letter-spacing:.16em; color:${DOURADO};">NOTA</div><div style="font-family:'Bebas Neue',sans-serif; font-size:100px; line-height:1;">${fmt1(j.nota)}</div></div>` : "<div></div>"}
