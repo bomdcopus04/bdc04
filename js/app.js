@@ -179,6 +179,13 @@ function render(){
 
 window.addEventListener("hashchange", render);
 
+// Logo/nome do time (barra lateral e topo no celular) levam pra tela inicial do app.
+$$(".brand, .mobile-topbar-brand").forEach(el => {
+  el.style.cursor = "pointer";
+  el.title = "Ir para o início";
+  el.addEventListener("click", () => { location.hash = "#dashboard"; });
+});
+
 $$(".nav-link[data-route]").forEach(btn => {
   btn.addEventListener("click", () => { location.hash = `#${btn.dataset.route}`; });
 });

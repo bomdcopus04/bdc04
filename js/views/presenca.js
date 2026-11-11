@@ -93,6 +93,10 @@ function desenhar(root, state, jogoId){
   const chip = (label, n) => `<div class="kpi-tile"><div class="kpi-label">${label}</div><div class="kpi-value">${n}</div></div>`;
 
   root.innerHTML = `
+    <a href="#dashboard" title="Abrir o app do Bom D' Copus" style="display:inline-flex; align-items:center; gap:10px; text-decoration:none; color:inherit; margin-bottom:14px;">
+      <img src="assets/logo-bomdcopus.png" alt="Bom D' Copus" style="width:46px; height:46px; border-radius:50%; object-fit:cover;">
+      <span style="font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:.04em;">BOM D' COPUS</span>
+    </a>
     <div class="topbar">
       <div>
         <div class="eyebrow">Confirmação de presença</div>
