@@ -1,5 +1,5 @@
 import { $, $$, escapeHtml, openModal, closeModal, toast, confirmAction, formatDate, formatDateLong, todayISO, fmt1, ratingWidgetHtml, wireRatingWidgets, reRenderKeepingFocus } from "../utils.js";
-import { createDoc, saveDoc, removeDoc, updateJogoField } from "../db.js";
+import { createDoc, saveDoc, removeDoc, updateJogoField, listenPresencas } from "../db.js";
 import { fieldHtml, collectFormData, POSICOES } from "./cadastros.js";
 import { resultadoJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida } from "../stats.js";
 
@@ -10,6 +10,13 @@ export const TIPOS_PARTIDA = ["Amistoso", "Festival", "Campeonato"];
 let activeTab = "escalacao-inicial";
 let lastJogoId = null;
 let searchJogos = "";
+
+// Presenças do jogo aberto (alimenta a escalação: só confirmados aparecem
+// por padrão). Escuta só enquanto o usuário está nesta tela de detalhe.
+let presUnsub = null;
+let presJogoId = null;
+let presencasJogo = null; // null = ainda carregando
+let presAssinatura = "";
 
 // ============================================================================
 // Formulário de jogo (criar / editar dados gerais)
@@ -176,6 +183,19 @@ export function renderJogosList(root, state){
 export function renderJogoDetail(root, state, jogoId){
   if (jogoId !== lastJogoId){ activeTab = "escalacao-inicial"; lastJogoId = jogoId; }
 
+  if (presJogoId !== jogoId){
+    if (presUnsub) presUnsub();
+    presJogoId = jogoId; presencasJogo = null; presAssinatura = "";
+    presUnsub = listenPresencas(jogoId, (items) => {
+      const assin = items.map(p => `${p.atletaId}:${p.resposta}`).sort().join("|");
+      const primeira = presencasJogo === null;
+      presencasJogo = items;
+      if (!primeira && assin === presAssinatura) return;
+      presAssinatura = assin;
+      if (location.hash === `#jogos/${jogoId}`) renderJogoDetail(root, state, jogoId);
+    });
+  }
+
   const jogo = state.jogos.find(j => j.id === jogoId);
   if (!jogo){
     root.innerHTML = `<div class="empty-state"><h3>Jogo não encontrado</h3><p>Ele pode ter sido excluído.</p>
@@ -220,10 +240,10 @@ export function renderJogoDetail(root, state, jogoId){
     </div>
 
     <div class="tab-panel" data-panel="escalacao-inicial">
-      ${renderEscalacaoPanel(jogo, state.atletas, "escalacaoInicial")}
+      ${renderEscalacaoPanel(jogo, state.atletas, "escalacaoInicial", presencasJogo)}
     </div>
     <div class="tab-panel" data-panel="escalacao-final">
-      ${renderEscalacaoPanel(jogo, state.atletas, "escalacaoFinal")}
+      ${renderEscalacaoPanel(jogo, state.atletas, "escalacaoFinal", presencasJogo)}
     </div>
     <div class="tab-panel" data-panel="gols">
       ${renderGolsPanel(jogo, state.atletas)}
@@ -265,7 +285,9 @@ export function renderJogoDetail(root, state, jogoId){
 // Escalação (inicial / final)
 // ----------------------------------------------------------------------------
 
-function renderEscalacaoPanel(jogo, atletas, field){
+const ROTULO_RESP = { vou: "confirmou", talvez: "talvez", nao: "não vou" };
+
+function renderEscalacaoPanel(jogo, atletas, field, presencas){
   const escalacao = normalizeEscalacao(jogo[field]);
   const posicaoPorId = Object.fromEntries(escalacao.map(e => [e.atletaId, e.posicao]));
   const selecionados = new Set(escalacao.map(e => e.atletaId));
@@ -279,26 +301,54 @@ function renderEscalacaoPanel(jogo, atletas, field){
   const posOptions = (selecionada) => POSICOES.map(p =>
     `<option value="${p}" ${p === selecionada ? "selected" : ""}>${p}</option>`).join("");
 
-  return `
-    <div class="card card-pad">
-      <div class="card-title">${field === "escalacaoInicial" ? "Escalação inicial" : "Escalação final"}</div>
-      <div class="card-sub">Selecione os atletas que jogaram e a posição em que atuaram nesta partida.</div>
-      <div class="player-grid player-grid-escalacao">
-        ${disponiveis.map(a => {
-          const checked = selecionados.has(a.id);
-          const posicaoAtual = posicaoPorId[a.id] || a.posicao || "";
-          return `
-          <label class="player-chip ${checked ? "selected" : ""}" data-chip="${a.id}">
+  // Com confirmações de presença, a lista mostra só quem confirmou ("vou") e
+  // quem já está escalado; os demais ficam escondidos e entram pelo seletor
+  // "Adicionar jogador" (caso alguém apareça sem ter confirmado). Sem nenhuma
+  // confirmação (jogos antigos), mostra todo mundo como sempre.
+  const resp = new Map((presencas || []).map(p => [p.atletaId, p.resposta]));
+  const confirmados = new Set([...resp].filter(([, r]) => r === "vou").map(([id]) => id));
+  const filtrar = confirmados.size > 0;
+  const visivel = (a) => !filtrar || confirmados.has(a.id) || selecionados.has(a.id);
+  const escondidos = disponiveis.filter(a => !visivel(a));
+
+  const chip = (a) => {
+    const checked = selecionados.has(a.id);
+    const posicaoAtual = posicaoPorId[a.id] || a.posicao || "";
+    const r = resp.get(a.id);
+    const tag = filtrar && !confirmados.has(a.id) && checked ? `<small style="color:var(--ink-faint);">${r ? ROTULO_RESP[r] : "não confirmou"}</small>` : "";
+    return `
+          <label class="player-chip ${checked ? "selected" : ""}" data-chip="${a.id}" ${visivel(a) ? "" : "hidden"}>
             <input type="checkbox" value="${a.id}" ${checked ? "checked" : ""}>
             <span class="player-num">${a.numero ?? "–"}</span>
-            <span style="flex:1;">${escapeHtml(a.nome)}</span>
+            <span style="flex:1;">${escapeHtml(a.nome)} ${tag}</span>
             <select class="chip-posicao" ${checked ? "" : "disabled"}>
               <option value="">Posição…</option>
               ${posOptions(posicaoAtual)}
             </select>
           </label>`;
-        }).join("")}
+  };
+
+  const extras = escondidos.length ? `
+      <div class="field" style="max-width:340px; margin-top:12px;">
+        <label>Adicionar jogador que não confirmou</label>
+        <select class="add-extra">
+          <option value="">Selecione…</option>
+          ${escondidos.map(a => `<option value="${a.id}">${escapeHtml(a.nome)}${resp.get(a.id) ? ` (${ROTULO_RESP[resp.get(a.id)]})` : " (sem resposta)"}</option>`).join("")}
+        </select>
+      </div>` : "";
+
+  const sub = filtrar
+    ? `Mostrando os ${confirmados.size} que confirmaram presença. Marque quem jogou e a posição; se alguém foi sem confirmar, adicione abaixo.`
+    : "Selecione os atletas que jogaram e a posição em que atuaram nesta partida.";
+
+  return `
+    <div class="card card-pad">
+      <div class="card-title">${field === "escalacaoInicial" ? "Escalação inicial" : "Escalação final"}</div>
+      <div class="card-sub">${sub}</div>
+      <div class="player-grid player-grid-escalacao">
+        ${disponiveis.map(chip).join("")}
       </div>
+      ${extras}
       <div class="form-actions"><button class="btn btn-primary" data-save-escalacao="${field}">Salvar</button></div>
     </div>
   `;
@@ -325,6 +375,21 @@ function wireEscalacaoPanel(root, jogo, field, panelSel){
       sync();
     });
     cb.addEventListener("change", sync);
+  });
+  const extra = $(".add-extra", panel);
+  extra?.addEventListener("change", () => {
+    const id = extra.value;
+    if (!id) return;
+    const chip = panel.querySelector(`.player-chip[data-chip="${id}"]`);
+    if (chip){
+      chip.hidden = false;
+      const cb = chip.querySelector('input[type="checkbox"]');
+      cb.checked = true;
+      cb.dispatchEvent(new Event("change"));
+    }
+    extra.querySelector(`option[value="${id}"]`)?.remove();
+    extra.value = "";
+    if (extra.options.length <= 1) extra.closest(".field").remove();
   });
   const btn = $(`[data-save-escalacao="${field}"]`, panel);
   btn?.addEventListener("click", async () => {

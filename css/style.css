@@ -531,3 +531,4 @@ tbody tr.clickable{cursor:pointer;}
 @media (min-width: 881px){
   .mobile-topbar{display:none;}
 }
+.player-chip[hidden]{display:none !important;}
