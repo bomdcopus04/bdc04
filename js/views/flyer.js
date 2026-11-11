@@ -118,7 +118,7 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo }){
   }
 
   // Resultado
-  const t = 240;
+  const t = 210;
   const placar = `${jogo.placarNos ?? "–"} x ${jogo.placarAdversario ?? "–"}`;
   const res = resultadoJogo(jogo);
   const rotulo = res === "vitoria" ? "VITÓRIA" : res === "derrota" ? "DERROTA" : res === "empate" ? "EMPATE" : "";
@@ -140,9 +140,9 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo }){
     <div style="text-align:center;">
       <div style="font-family:'Bebas Neue',sans-serif; font-size:56px; letter-spacing:.2em; color:${DOURADO};">${rotulo ? `${rotulo} · ` : ""}${escapeHtml(String(jogo.tipoPartida || "Amistoso").toUpperCase())}</div>
     </div>
-    <div style="display:flex; align-items:center; justify-content:center; gap:30px;">
+    <div style="display:flex; align-items:center; justify-content:center; gap:24px;">
       ${bdc.replace(/__T__/g, t)}
-      <div style="font-family:'Bebas Neue',sans-serif; font-size:230px; line-height:1; letter-spacing:.02em;">${escapeHtml(placar)}</div>
+      <div style="font-family:'Bebas Neue',sans-serif; font-size:200px; line-height:1; letter-spacing:.02em; white-space:nowrap;">${escapeHtml(placar)}</div>
       ${escudoHtml(escudo, adv?.nome, t, T.accent)}
     </div>
     <div style="text-align:center;">
