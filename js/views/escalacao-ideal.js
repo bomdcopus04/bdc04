@@ -1,4 +1,5 @@
-import { $, $$, escapeHtml, fmt1, toast, reRenderKeepingFocus } from "../utils.js";
+import { $, $$, escapeHtml, fmt1, toast, reRenderKeepingFocus, formatDate } from "../utils.js";
+import { listenPresencas } from "../db.js";
 import { mediaNotaAtleta, notasPorPosicao, jogosRealizados, ehJogador } from "../stats.js";
 import { filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
 
@@ -54,6 +55,20 @@ let formacaoAtual = "4-3-3";
 // nas partidas (com a posição cadastrada como 2º critério); "cadastro" = só a
 // posição cadastrada no elenco, com a nota média geral do atleta.
 let criterio = "jogada";
+
+// Simulação com os confirmados da próxima partida agendada: quando ligada, só
+// entram no cálculo os jogadores que responderam "Vou" no link de presença.
+let soConfirmados = false;
+let presUnsub = null;
+let presJogoId = null;
+let presProx = null; // null = ainda carregando
+let presAssin = "";
+
+// Posições "vizinhas", usadas só no último recurso (jogador fora de posição).
+const POSICOES_PROXIMAS = {
+  Goleiro: [], Zagueiro: ["Lateral", "Volante"], Lateral: ["Zagueiro", "Meia"],
+  Volante: ["Meia", "Zagueiro"], Meia: ["Volante", "Atacante"], Atacante: ["Meia"],
+};
 let filtroAno = "";
 let filtroMes = "";
 const excluidos = new Set();
@@ -160,7 +175,30 @@ export function renderEscalacaoIdeal(root, state){
   const jogosFiltrados = filtrarPorPeriodo(realizados, { ano: filtroAno, mes: filtroMes });
 
   const atletasElenco = state.atletas.filter(a => a.ativo !== false && ehJogador(a));
-  const atletasConsiderados = atletasElenco.filter(a => !excluidos.has(a.id));
+  // Próxima partida agendada (de hoje em diante) e quem confirmou presença nela.
+  const hoje = new Date().toLocaleDateString("sv-SE");
+  const proximo = state.jogos.filter(j => j.status === "agendado" && (j.data || "") >= hoje)
+    .sort((a, b) => (a.data || "").localeCompare(b.data || ""))[0] || null;
+  if (!proximo){
+    if (presUnsub){ presUnsub(); presUnsub = null; }
+    presJogoId = null; presProx = null;
+    soConfirmados = false;
+  } else if (presJogoId !== proximo.id){
+    if (presUnsub) presUnsub();
+    presJogoId = proximo.id; presProx = null; presAssin = "";
+    presUnsub = listenPresencas(proximo.id, (items) => {
+      const assin = items.map(p => `${p.atletaId}:${p.resposta}`).sort().join("|");
+      const primeira = presProx === null;
+      presProx = items;
+      if (!primeira && assin === presAssin) return;
+      presAssin = assin;
+      if (soConfirmados) resetArranjoManual();
+      if (location.hash === "#escalacao-ideal") renderEscalacaoIdeal(root, state);
+    });
+  }
+  const confirmados = new Set((presProx || []).filter(p => p.resposta === "vou").map(p => p.atletaId));
+  const foraDaSimulacao = (a) => soConfirmados && !confirmados.has(a.id);
+  const atletasConsiderados = atletasElenco.filter(a => !excluidos.has(a.id) && !foraDaSimulacao(a));
 
   const notasPos = notasPorPosicao(atletasConsiderados, jogosFiltrados);
   const linhas = FORMATIONS[formacaoAtual] || FORMATIONS["4-3-3"];
@@ -204,8 +242,35 @@ export function renderEscalacaoIdeal(root, state){
     if (cand){ atribuido[vi] = cand.id; usados.add(cand.id); }
   });
 
-  // 3ª regra: ainda sobrou vaga? Entra quem restou (fora de posição), pelo
-  // melhor desempenho geral. Só fica "Vaga em aberto" se houver menos de 11 jogadores.
+  // Último recurso (vagas ainda abertas), em 3 passos:
+  // a) quem já jogou naquela posição em alguma partida, mesmo com outra posição
+  //    no cadastro (ex: um zagueiro cadastrado que já foi goleiro);
+  const paresA = [];
+  vagas.forEach((v, vi) => {
+    if (atribuido[vi]) return;
+    atletasConsiderados.forEach(a => {
+      if (usados.has(a.id)) return;
+      const porPosicao = notasPos[a.id];
+      if (!porPosicao) return;
+      let melhor = null;
+      v.pos.forEach(p => { const st = porPosicao[p]; if (st && (melhor === null || st.media > melhor)) melhor = st.media; });
+      if (melhor !== null) paresA.push({ vi, id: a.id, media: melhor });
+    });
+  });
+  paresA.sort((x, y) => y.media - x.media);
+  paresA.forEach(p => {
+    if (atribuido[p.vi] || usados.has(p.id)) return;
+    atribuido[p.vi] = p.id; usados.add(p.id);
+  });
+  // b) quem tem no cadastro uma posição vizinha (ex: lateral na vaga de zagueiro);
+  vagas.forEach((v, vi) => {
+    if (atribuido[vi]) return;
+    const viz = new Set(v.pos.flatMap(p => POSICOES_PROXIMAS[p] || []));
+    const cand = atletasConsiderados.filter(a => !usados.has(a.id) && viz.has(a.posicao)).sort(porGeral)[0];
+    if (cand){ atribuido[vi] = cand.id; usados.add(cand.id); }
+  });
+  // c) quem restar, pelo melhor desempenho geral. Só fica "Vaga em aberto" se
+  //    houver menos de 11 jogadores.
   const sobrando = atletasConsiderados.filter(a => !usados.has(a.id)).sort(porGeral);
   vagas.forEach((v, vi) => {
     if (atribuido[vi] || sobrando.length === 0) return;
@@ -312,6 +377,13 @@ export function renderEscalacaoIdeal(root, state){
         </select>
       </div>
       <div class="field">
+        <label>Jogadores</label>
+        <select id="sel-modo" ${proximo ? "" : "disabled"}>
+          <option value="todos" ${soConfirmados ? "" : "selected"}>Todo o elenco</option>
+          <option value="conf" ${soConfirmados ? "selected" : ""}>${proximo ? `Confirmados — ${formatDate(proximo.data)} vs ${escapeHtml(state.adversarios.find(x => x.id === proximo.adversarioId)?.nome || "?")}` : "Confirmados (sem partida agendada)"}</option>
+        </select>
+      </div>
+      <div class="field">
         <label>Critério</label>
         <select id="sel-criterio">
           <option value="jogada" ${criterio === "jogada" ? "selected" : ""}>Posição jogada nas partidas</option>
@@ -339,14 +411,20 @@ export function renderEscalacaoIdeal(root, state){
 
     <div class="card card-pad" style="margin-bottom:20px;">
       <div class="card-title">Jogadores considerados</div>
-      <div class="card-sub">Desmarque quem você não quer considerar no cálculo da escalação ideal. Por padrão, todos entram.</div>
+      <div class="card-sub">${soConfirmados
+        ? `Simulação com quem confirmou presença na próxima partida (${confirmados.size} confirmados${confirmados.size < 11 ? ` — faltam ${11 - confirmados.size} para fechar 11` : ""}). Desmarque quem não quiser considerar.`
+        : "Desmarque quem você não quer considerar no cálculo da escalação ideal. Por padrão, todos entram."}</div>
       <div class="player-grid">
-        ${atletasElenco.map(a => `
-          <label class="player-chip ${excluidos.has(a.id) ? "" : "selected"}">
-            <input type="checkbox" data-excluir="${a.id}" ${excluidos.has(a.id) ? "" : "checked"}>
+        ${atletasElenco.map(a => {
+          const fora = foraDaSimulacao(a);
+          const marcado = !fora && !excluidos.has(a.id);
+          return `
+          <label class="player-chip ${marcado ? "selected" : ""}" ${fora ? `style="opacity:.55;"` : ""}>
+            <input type="checkbox" data-excluir="${a.id}" ${marcado ? "checked" : ""} ${fora ? "disabled" : ""}>
             <span class="player-num">${a.numero ?? "•"}</span>
-            <span style="flex:1;">${escapeHtml(a.nome)}</span>
-          </label>`).join("")}
+            <span style="flex:1;">${escapeHtml(a.nome)}${fora ? ` <small style="color:var(--ink-faint);">não confirmou</small>` : ""}</span>
+          </label>`;
+        }).join("")}
       </div>
     </div>
 
@@ -388,6 +466,7 @@ export function renderEscalacaoIdeal(root, state){
   // Trocar formação, período ou a seleção de jogadores invalida qualquer
   // arranjo manual feito até então — a sugestão automática é recalculada do zero.
   $("#sel-formacao", root)?.addEventListener("change", (e) => { formacaoAtual = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
+  $("#sel-modo", root)?.addEventListener("change", (e) => { soConfirmados = e.target.value === "conf"; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
   $("#sel-criterio", root)?.addEventListener("change", (e) => { criterio = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
   $("#filtro-ano", root)?.addEventListener("change", (e) => { filtroAno = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
   $("#filtro-mes", root)?.addEventListener("change", (e) => { filtroMes = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
