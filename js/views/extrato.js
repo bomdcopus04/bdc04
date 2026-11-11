@@ -4,6 +4,9 @@ import {
   notasDoAtletaNoJogo, resultadoJogo, GOL_CONTRA_ID,
 } from "../stats.js";
 
+// Filtro de ano (módulo, pra sobreviver entre re-renders e à troca de jogador).
+let filtroAno = "";
+
 // Extrato do jogador — tela pública (mesmo nível do Ranking). A nota média
 // de cada jogo é aberta a todos; o detalhe de "quem deu qual nota" só
 // aparece pra quem está logado com conta autorizada.
@@ -16,8 +19,11 @@ export function renderExtrato(root, state, atletaId){
     `<option value="${a.id}" ${atleta && a.id === atleta.id ? "selected" : ""}>${escapeHtml(a.nome)}${a.ativo === false ? " (inativo)" : ""}</option>`
   ).join("");
 
+  const anos = [...new Set(jogosRealizados(state.jogos).map(j => (j.data || "").slice(0, 4)).filter(Boolean))].sort().reverse();
+  if (filtroAno && !anos.includes(filtroAno)) filtroAno = "";
+
   let corpo = `<div class="empty-state"><h3>Escolha um jogador</h3><p>Selecione um atleta acima para ver o extrato dele.</p></div>`;
-  if (atleta) corpo = extratoHtml(atleta, state);
+  if (atleta) corpo = extratoHtml(atleta, state, filtroAno);
 
   root.innerHTML = `
     <div class="topbar">
@@ -26,12 +32,21 @@ export function renderExtrato(root, state, atletaId){
         <h1>Extrato do jogador</h1>
       </div>
     </div>
-    <div class="field" style="max-width:320px; margin-bottom:20px;">
-      <label>Jogador</label>
-      <select id="extrato-atleta">
-        <option value="">Selecione…</option>
-        ${opcoes}
-      </select>
+    <div class="form-grid" style="max-width:480px; margin-bottom:20px;">
+      <div class="field">
+        <label>Jogador</label>
+        <select id="extrato-atleta">
+          <option value="">Selecione…</option>
+          ${opcoes}
+        </select>
+      </div>
+      <div class="field">
+        <label>Ano</label>
+        <select id="extrato-ano">
+          <option value="">Todos</option>
+          ${anos.map(a => `<option value="${a}" ${a === filtroAno ? "selected" : ""}>${a}</option>`).join("")}
+        </select>
+      </div>
     </div>
     ${corpo}
   `;
@@ -39,10 +54,14 @@ export function renderExtrato(root, state, atletaId){
   $("#extrato-atleta", root).addEventListener("change", (e) => {
     location.hash = e.target.value ? `#extrato/${e.target.value}` : "#extrato";
   });
+  $("#extrato-ano", root).addEventListener("change", (e) => {
+    filtroAno = e.target.value;
+    renderExtrato(root, state, atletaId);
+  });
 }
 
-function extratoHtml(atleta, state){
-  const realizados = jogosRealizados(state.jogos);
+function extratoHtml(atleta, state, ano){
+  const realizados = jogosRealizados(state.jogos).filter(j => !ano || (j.data || "").startsWith(ano));
   const nomeAtleta = (id) => state.atletas.find(a => a.id === id)?.nome || "?";
   const nomeAdv = (id) => state.adversarios.find(a => a.id === id)?.nome || "?";
 
@@ -122,7 +141,7 @@ function extratoHtml(atleta, state){
   return `
     <div style="margin-bottom:6px; font-size:13px; color:var(--ink-soft);">
       ${escapeHtml(atleta.posicao || "")}${atleta.numero !== null && atleta.numero !== undefined ? ` · camisa ${atleta.numero}` : ""}
-      · ${v}V ${e}E ${d}D nos jogos em que participou
+      · ${v}V ${e}E ${d}D nos jogos em que participou${ano ? ` em ${ano}` : ""}
     </div>
     <div class="kpi-grid">${kpiHtml}</div>
     <h2 style="font-size:18px; margin:6px 0 12px;">Partidas</h2>
