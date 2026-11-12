@@ -80,6 +80,7 @@ const excluidos = new Set();
 // esse arranjo passa a mandar na exibição, até a formação/filtro/seleção
 // mudar (aí é reiniciado) ou o usuário pedir pra restaurar a sugestão.
 let ordem = null;
+let consideradosAberto = false;
 let selecionadoIdx = null;
 
 function resetArranjoManual(){
@@ -352,6 +353,21 @@ export function renderEscalacaoIdeal(root, state){
     .filter(x => x.media !== null)
     .sort((a, b) => b.media - a.media);
 
+  // ---- Manchete: resumo do time montado ----
+  const idsTime = (ordem || []).filter(Boolean);
+  const mediasTime = idsTime.map(id => geral[id]).filter(m => m !== null && m !== undefined);
+  const mediaTime = mediasTime.length ? mediasTime.reduce((t, m) => t + m, 0) / mediasTime.length : null;
+  const destaqueTime = [...idsTime].filter(id => geral[id] != null).sort((a, b) => geral[b] - geral[a])[0];
+  const nomeDe = (id) => atletasElenco.find(a => a.id === id)?.nome || "?";
+  const advProx = proximo ? (state.adversarios.find(x => x.id === proximo.adversarioId)?.nome || "?") : "";
+  const periodoTxt = [filtroMes ? MESES[Number(filtroMes) - 1] : "", filtroAno].filter(Boolean).join(" de ") || "toda a história";
+  const manchete = temDados ? `
+    <div class="manchete">
+      <div class="manchete-eyebrow">${soConfirmados && proximo ? `Simulação para o jogo contra ${escapeHtml(advProx)} · ${formatDate(proximo.data)}` : "Melhor time possível"}</div>
+      <div class="manchete-titulo">Formação ${escapeHtml(formacaoAtual)}${mediaTime !== null ? ` · nota média ${fmt1(mediaTime)}` : ""}</div>
+      <div class="manchete-sub">${destaqueTime ? `Destaque do time: ${escapeHtml(nomeDe(destaqueTime))} (${fmt1(geral[destaqueTime])}) · ` : ""}${atletasConsiderados.length} jogador${atletasConsiderados.length === 1 ? "" : "es"} considerado${atletasConsiderados.length === 1 ? "" : "s"} · ${jogosFiltrados.length} jogo${jogosFiltrados.length === 1 ? "" : "s"} analisado${jogosFiltrados.length === 1 ? "" : "s"} (${escapeHtml(periodoTxt)})</div>
+    </div>` : "";
+
   root.innerHTML = `
     <div class="topbar">
       <div><div class="eyebrow">Visão geral</div><h1>Escalação ideal</h1></div>
@@ -359,7 +375,10 @@ export function renderEscalacaoIdeal(root, state){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
       </button>
     </div>
-    <p style="font-size:13px; color:var(--ink-soft); margin:-14px 0 20px; max-width:640px;">
+    ${manchete}
+    <details class="como-funciona" style="margin:0 0 18px; font-size:13px; color:var(--ink-soft); max-width:680px;">
+      <summary style="cursor:pointer; font-weight:600;">Como a escalação é montada</summary>
+      <p style="margin:8px 0 0;">
       ${criterio === "jogada"
         ? `Calculada pela nota média de cada atleta na posição em que ele foi escalado nas partidas (não a posição
       cadastrada). Cada vaga usa primeiro quem tem nota jogando naquela posição; se sobrar vaga, usa a posição
@@ -368,8 +387,9 @@ export function renderEscalacaoIdeal(root, state){
       média geral; se sobrar vaga, preenche com quem restar.`}
       Só fica vaga em aberto se você selecionar menos de 11 jogadores. Laterais ficam nas pontas da defesa e zagueiros no centro.
     </p>
+    </details>
 
-    <div class="form-grid" style="margin-bottom:20px; max-width:680px;">
+    <div class="rank-filtros" style="max-width:900px;">
       <div class="field">
         <label>Formação</label>
         <select id="sel-formacao">
@@ -409,8 +429,9 @@ export function renderEscalacaoIdeal(root, state){
       </div>
     </div>
 
-    <div class="card card-pad" style="margin-bottom:20px;">
-      <div class="card-title">Jogadores considerados</div>
+    <details class="card card-pad" id="det-considerados" style="margin-bottom:20px;" ${consideradosAberto ? "open" : ""}>
+      <summary style="cursor:pointer; list-style:none;"><span class="card-title">Jogadores considerados</span> <span class="card-sub" style="margin:0 0 0 8px;">${atletasConsiderados.length} de ${atletasElenco.length} no cálculo — toque para ${consideradosAberto ? "recolher" : "ajustar"}</span></summary>
+      <div style="height:10px;"></div>
       <div class="card-sub">${soConfirmados
         ? `Simulação com quem confirmou presença na próxima partida (${confirmados.size} confirmados${confirmados.size < 11 ? ` — faltam ${11 - confirmados.size} para fechar 11` : ""}). Desmarque quem não quiser considerar.`
         : "Desmarque quem você não quer considerar no cálculo da escalação ideal. Por padrão, todos entram."}</div>
@@ -426,7 +447,7 @@ export function renderEscalacaoIdeal(root, state){
           </label>`;
         }).join("")}
       </div>
-    </div>
+    </details>
 
     ${!temDados ? `
       <div class="empty-state">
@@ -478,6 +499,8 @@ export function renderEscalacaoIdeal(root, state){
       reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state));
     });
   });
+
+  $("#det-considerados", root)?.addEventListener("toggle", (e) => { consideradosAberto = e.currentTarget.open; });
 
   $("#btn-reset-arranjo", root)?.addEventListener("click", () => {
     resetArranjoManual();
