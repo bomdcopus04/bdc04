@@ -677,3 +677,20 @@ th.col-ativa, td.col-ativa{ background:rgba(228,182,43,.16); font-weight:700; }
 .mes-bar{height:4px; background:var(--line, rgba(128,128,128,.25)); border-radius:2px; margin-top:6px; overflow:hidden;}
 .mes-bar span{display:block; height:4px; background:var(--gold);}
 .fin-linha{cursor:default !important; flex-wrap:wrap;}
+
+/* Tema escuro: manchetes em amarelo do BDC com texto preto */
+html[data-theme="dark"] .manchete,
+html[data-theme="dark"] .dash-hero{background:var(--gold); color:#171717;}
+html[data-theme="dark"] .manchete-eyebrow,
+html[data-theme="dark"] .dash-hero-eyebrow{color:rgba(23,23,23,.72);}
+html[data-theme="dark"] .manchete-titulo,
+html[data-theme="dark"] .dash-hero-title{color:#171717;}
+html[data-theme="dark"] .manchete-sub,
+html[data-theme="dark"] .dash-hero-sub{color:rgba(23,23,23,.85);}
+html[data-theme="dark"] .manchete-ult{color:#171717 !important; font-weight:600;}
+html[data-theme="dark"] .manchete .av-barra{background:rgba(23,23,23,.2);}
+html[data-theme="dark"] .manchete .av-barra span{background:#171717;}
+html[data-theme="dark"] .manchete .fx-avatar{background:#171717; color:var(--gold);}
+html[data-theme="dark"] .dash-chip{background:rgba(23,23,23,.14); color:#171717;}
+html[data-theme="dark"] .dash-chip.ok{background:rgba(20,80,31,.25); color:#14501f;}
+html[data-theme="dark"] .dash-chip.mute{color:rgba(23,23,23,.7);}
