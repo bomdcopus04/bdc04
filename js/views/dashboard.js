@@ -1,5 +1,6 @@
 import { $, $$, escapeHtml, formatDate, fmt1, toast, getTheme, toggleTheme, reRenderKeepingFocus } from "../utils.js";
-import { resumoGeral, rankingGolsAssistencias, mediaNotaJogadoresNoJogo, resultadoJogo, jogosRealizados, saldoGols, ehJogador } from "../stats.js";
+import { resumoGeral, resultadoJogo, jogosRealizados, saldoGols, ehJogador, statsPorAtleta, notasDoAtletaNoJogo } from "../stats.js";
+import { listenPresencas } from "../db.js";
 import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
 
 function renderQr(containerId, texto){
@@ -23,6 +24,59 @@ const RESULTADO_BADGE = {
 
 let outsideClickHandler = null;
 
+let unsubPresenca = null;
+
+function pararPresenca(){ if (unsubPresenca){ unsubPresenca(); unsubPresenca = null; } }
+
+// Sequência atual a partir dos resultados mais recentes.
+function textoSequencia(recentesDesc){
+  const res = recentesDesc.map(resultadoJogo);
+  const conta = (fn) => { let n = 0; for (const r of res){ if (fn(r)) n++; else break; } return n; };
+  const vit = conta(r => r === "vitoria");
+  if (vit >= 2) return `${vit} vitórias seguidas`;
+  const inv = conta(r => r && r !== "derrota");
+  if (inv >= 2) return `${inv} jogos sem perder`;
+  const sv = conta(r => r && r !== "vitoria");
+  if (res[0] === "derrota") return sv >= 2 ? `${sv} jogos sem vencer` : "Derrota no último jogo";
+  if (res[0] === "vitoria") return "Vitória no último jogo";
+  return res[0] === "empate" ? "Empate no último jogo" : "";
+}
+
+function diasAte(dataISO){
+  if (!dataISO) return null;
+  const [a, m, d] = dataISO.split("-").map(Number);
+  const alvo = new Date(a, m - 1, d);
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  return Math.round((alvo - hoje) / 86400000);
+}
+
+function textoDias(n){
+  if (n === null) return "";
+  if (n === 0) return "HOJE";
+  if (n === 1) return "AMANHÃ";
+  if (n < 0) return "DATA PASSADA";
+  return `EM ${n} DIAS`;
+}
+
+function destaqueMesHtml(s, mes){
+  const ini = (s.atleta.nome || "?").trim().split(/\s+/).map(p => p[0]).slice(0, 2).join("").toUpperCase();
+  const feitos = [s.gols ? `${s.gols} gol${s.gols > 1 ? "s" : ""}` : "", s.assistencias ? `${s.assistencias} assist.` : ""].filter(Boolean).join(" · ") || `${s.jogosCount} jogo${s.jogosCount === 1 ? "" : "s"}`;
+  return `<a href="#premiacoes" class="dash-mes" style="text-decoration:none; color:inherit;">
+    <div class="dash-mes-eyebrow">Destaque de ${escapeHtml(chaveMes(mes))}</div>
+    <div class="dash-mes-body">
+      <div class="dash-mes-avatar">${escapeHtml(ini)}</div>
+      <div style="flex:1; min-width:0;"><div class="podium-name">${escapeHtml(s.atleta.nome)}</div><div class="podium-sub">${escapeHtml(feitos)}</div></div>
+      <div class="dash-mes-nota">${fmt1(s.media)}</div>
+    </div>
+  </a>`;
+}
+
+function chaveMes(ref){
+  const [a, m] = ref.split("-").map(Number);
+  return `${MESES[m - 1]}/${a}`;
+}
+
+
 export function renderDashboard(root, state){
   const filtro = getFiltroPeriodo();
   const todosRealizados = jogosRealizados(state.jogos);
@@ -32,19 +86,43 @@ export function renderDashboard(root, state){
   const r = resumoGeral(realizadosFiltrados);
   const saldo = saldoGols(realizadosFiltrados);
   const pctAssistencia = r.qtdGols > 0 ? Math.round((r.qtdAssistencias / r.qtdGols) * 100) : 0;
-  const top3GA = rankingGolsAssistencias(state.atletas.filter(ehJogador), realizadosFiltrados).slice(0, 3);
+  const jogadores = state.atletas.filter(ehJogador);
   const ultimos5 = [...realizadosFiltrados].sort((a, b) => (b.data || "").localeCompare(a.data || "")).slice(0, 5);
-  const top3Partidas = realizadosFiltrados
-    .map(j => ({ jogo: j, ...mediaNotaJogadoresNoJogo(j) }))
-    .filter(x => x.media !== null)
-    .sort((a, b) => b.media - a.media)
-    .slice(0, 3);
+
+  // Destaques do período (seguem o filtro de ano/mês).
+  const statsPeriodo = statsPorAtleta(jogadores, realizadosFiltrados);
+  const porNome = (a, b) => (a.atleta.nome || "").localeCompare(b.atleta.nome || "", "pt-BR");
+  const jogosAvaliados = realizadosFiltrados.filter(j => Object.keys(j.avaliacoesJogadores || {}).some(id => notasDoAtletaNoJogo(j, id).length > 0)).length;
+  const minNota = Math.min(5, Math.max(1, Math.ceil(jogosAvaliados * 0.4)));
+  const comNota = (id) => realizadosFiltrados.filter(j => notasDoAtletaNoJogo(j, id).length > 0).length;
+  const lider = (lista, metric, desempate) => lista.sort((a, b) => metric(b) - metric(a) || desempate(a, b) || porNome(a, b)).slice(0, 3);
+  const destaques = [
+    { label: "Artilheiro", unid: "gols", lista: lider(statsPeriodo.filter(s => s.gols > 0), s => s.gols, (a, b) => b.assistencias - a.assistencias), val: s => s.gols, fmt: s => String(s.gols) },
+    { label: "Garçom", unid: "assistências", lista: lider(statsPeriodo.filter(s => s.assistencias > 0), s => s.assistencias, (a, b) => b.gols - a.gols), val: s => s.assistencias, fmt: s => String(s.assistencias) },
+    { label: "Melhor nota", unid: "nota média", lista: lider(statsPeriodo.filter(s => s.media !== null && comNota(s.atleta.id) >= minNota), s => s.media, (a, b) => b.jogosCount - a.jogosCount), val: s => s.media, fmt: s => fmt1(s.media) },
+  ];
+
+  // Forma recente: últimos 10 realizados (sem filtro), do mais antigo ao mais novo.
+  const recentesDesc = [...todosRealizados].sort((a, b) => (b.data || "").localeCompare(a.data || "")).slice(0, 10);
+  const sequencia = textoSequencia(recentesDesc);
+
+  // Destaque do mês: último mês com notas lançadas.
+  const meses = [...new Set(todosRealizados.map(j => (j.data || "").slice(0, 7)).filter(m => m.length === 7))].sort().reverse();
+  let destaqueMes = null, mesDestaque = null;
+  for (const m of meses){
+    const rk = statsPorAtleta(jogadores, todosRealizados.filter(j => (j.data || "").startsWith(m)))
+      .filter(s => s.media !== null && s.jogosCount > 0)
+      .sort((a, b) => b.media - a.media || (b.gols + b.assistencias) - (a.gols + a.assistencias) || b.jogosCount - a.jogosCount);
+    if (rk.length){ destaqueMes = rk[0]; mesDestaque = m; break; }
+  }
   // Próximos jogos não seguem o filtro de ano/mês — são sempre os agendamentos
   // futuros mais próximos, independente do período usado pra olhar o histórico.
   const proximosJogos = state.jogos
     .filter(j => j.status !== "realizado")
     .sort((a, b) => (a.data || "").localeCompare(b.data || ""))
     .slice(0, 5);
+  const hojeISO = new Date().toISOString().slice(0, 10);
+  const proximo = proximosJogos.find(j => (j.data || "") >= hojeISO) || proximosJogos[0] || null;
 
   const nomeAdv = id => escapeHtml(state.adversarios.find(a => a.id === id)?.nome || "?");
   const nomeCampo = id => escapeHtml(state.campos.find(c => c.id === id)?.nome || "?");
@@ -114,38 +192,43 @@ export function renderDashboard(root, state){
       <div class="kpi-tile"><div class="kpi-label">Nota média jogadores</div><div class="kpi-value">${fmt1(r.mediaJogadores)}</div></div>
     </div>
 
-    <div class="dashboard-grid-3">
-      <div class="card card-pad">
-        <div class="card-title">Artilharia &amp; garçons — Top 3</div>
-        <div class="card-sub">Gols + assistências no período selecionado</div>
-        ${top3GA.length === 0 ? `<p style="color:var(--ink-faint); font-size:13px;">Nenhum gol registrado ainda.</p>` : top3GA.map((t, i) => `
-          <div class="podium-row">
-            <span class="podium-rank">${i + 1}º</span>
-            <div style="flex:1;">
-              <div class="podium-name">${escapeHtml(t.atleta.nome)}</div>
-              <div class="podium-sub">${t.gols} gol(s) · ${t.assistencias} assist.</div>
-            </div>
-            <span class="podium-val">${t.gols + t.assistencias}</span>
-          </div>`).join("")}
-        <div class="form-actions" style="justify-content:flex-start; border:none; padding-top:12px;">
-          <a href="#ranking" class="btn btn-ghost btn-sm">Ver ranking completo →</a>
-        </div>
+    ${proximo ? `
+    <div class="dash-top">
+      <div class="dash-hero" data-goto="${proximo.id}" style="cursor:pointer;">
+        <div class="dash-hero-eyebrow">Próximo jogo · ${textoDias(diasAte(proximo.data))}</div>
+        <div class="dash-hero-title">vs ${nomeAdv(proximo.adversarioId)}</div>
+        <div class="dash-hero-sub">${formatDate(proximo.data)}${proximo.horario ? ` · ${escapeHtml(proximo.horario)}` : ""} · ${nomeCampo(proximo.campoId)}</div>
+        <div class="dash-hero-pres" id="hero-pres"></div>
       </div>
+      ${destaqueMes ? destaqueMesHtml(destaqueMes, mesDestaque) : ""}
+    </div>` : (destaqueMes ? `<div class="dash-top">${destaqueMesHtml(destaqueMes, mesDestaque)}</div>` : "")}
 
-      <div class="card card-pad">
-        <div class="card-title">Top 3 — melhores partidas</div>
-        <div class="card-sub">Média das notas dos jogadores em cada partida</div>
-        ${top3Partidas.length === 0 ? `<p style="color:var(--ink-faint); font-size:13px;">Sem partidas avaliadas ainda.</p>` : top3Partidas.map((t, i) => `
-          <div class="podium-row" style="cursor:pointer;" data-goto="${t.jogo.id}">
-            <span class="podium-rank">${i + 1}º</span>
-            <div style="flex:1;">
-              <div class="podium-name">vs ${nomeAdv(t.jogo.adversarioId)}</div>
-              <div class="podium-sub">${formatDate(t.jogo.data)} · ${t.qtd} nota(s)</div>
-            </div>
-            <span class="podium-val">${fmt1(t.media)}</span>
-          </div>`).join("")}
+    <div class="card card-pad dash-forma">
+      <div>
+        <div class="card-sub" style="margin-bottom:6px;">Forma recente (últimos ${recentesDesc.length} jogos)</div>
+        <div class="dash-dots">${[...recentesDesc].reverse().map(j => { const r = resultadoJogo(j); return `<span data-goto="${j.id}" style="cursor:pointer;">${r ? RESULTADO_BADGE[r] : "—"}</span>`; }).join("")}</div>
       </div>
+      ${sequencia ? `<div class="dash-seq"><div class="dash-seq-val">${sequencia}</div><div class="card-sub" style="margin:0;">sequência atual</div></div>` : ""}
+    </div>
 
+    <div class="dash-section-title">Destaques do período</div>
+    <div class="dash-stats">
+      ${destaques.map(d => {
+        const [p1, p2, p3] = d.lista;
+        if (!p1) return `<div class="card card-pad dash-stat"><div class="card-sub" style="margin-bottom:4px;">${d.label}</div><p style="color:var(--ink-faint); font-size:13px; margin:0;">Sem dados ainda.</p></div>`;
+        const outros = [p2, p3].filter(Boolean).map((s, i) => `${i + 2}º ${escapeHtml(s.atleta.nome)} ${d.fmt(s)}`).join(" · ");
+        return `<div class="card card-pad dash-stat">
+          <div class="card-sub" style="margin-bottom:2px;">${d.label}</div>
+          <div class="dash-stat-val">${d.fmt(p1)}</div>
+          <div class="podium-name">${escapeHtml(p1.atleta.nome)}</div>
+          <div class="dash-bar"><span style="width:${p2 ? Math.max(8, Math.round(d.val(p2) / d.val(p1) * 100)) : 100}%"></span></div>
+          <div class="podium-sub">${outros || d.unid}</div>
+        </div>`;
+      }).join("")}
+    </div>
+    <div style="margin:-6px 0 20px;"><a href="#ranking" class="btn btn-ghost btn-sm">Ver ranking completo →</a> <a href="#premiacoes" class="btn btn-ghost btn-sm">Premiações →</a></div>
+
+    <div class="dash-bottom">
       <div class="card card-pad">
         <div class="card-title">Últimos 5 confrontos</div>
         <div class="card-sub">Resultados mais recentes</div>
@@ -177,6 +260,20 @@ export function renderDashboard(root, state){
       </div>
     </div>
   `;
+
+  pararPresenca();
+  if (proximo){
+    const ativos = jogadores.filter(a => a.ativo !== false);
+    unsubPresenca = listenPresencas(proximo.id, (items) => {
+      const el = document.getElementById("hero-pres");
+      if (!el){ pararPresenca(); return; }
+      const resp = new Map(items.map(p => [p.atletaId, p.resposta]));
+      let vou = 0, talvez = 0, nao = 0;
+      ativos.forEach(a => { const r = resp.get(a.id); if (r === "vou") vou++; else if (r === "talvez") talvez++; else if (r === "nao") nao++; });
+      const sem = ativos.length - vou - talvez - nao;
+      el.innerHTML = `<span class="dash-chip ok">${vou} vão</span><span class="dash-chip">${talvez} talvez</span><span class="dash-chip">${nao} não vão</span><span class="dash-chip mute">${sem} sem resposta</span>`;
+    });
+  }
 
   $$("[data-goto]", root).forEach(el => el.addEventListener("click", () => { location.hash = `#jogos/${el.dataset.goto}`; }));
 
