@@ -44,11 +44,14 @@ export function renderRetrospecto(root, state){
   // Destaques: sempre calculados sobre adversários e campos do período.
   const advs = agrupar(jogos, "adversarioId");
   const campos = agrupar(jogos, "campoId");
-  const elegiveis = (arr) => { const e = arr.filter(g => g.jogos >= 2); return e.length >= 2 ? e : arr; };
+  // Prefere quem tem 3+ jogos; se não houver, 2+; por fim, todos.
+  const elegiveis = (arr) => { for (const min of [3, 2]){ const e = arr.filter(g => g.jogos >= min); if (e.length >= 2) return e; } return arr; };
+  const ehPlaceholder = (id) => /n[ãa]o identificado/i.test(nomeAdv(id));
   const melhor = (arr) => [...elegiveis(arr)].sort((a, b) => b.aprov - a.aprov || b.sg - a.sg || b.jogos - a.jogos)[0];
   const pior = (arr) => [...elegiveis(arr)].sort((a, b) => a.aprov - b.aprov || a.sg - b.sg || b.jogos - a.jogos)[0];
-  const fregues = advs.length >= 2 ? melhor(advs) : null;
-  const carrasco = advs.length >= 2 ? pior(advs) : null;
+  const advsReais = advs.filter(g => !ehPlaceholder(g.id));
+  const fregues = advsReais.length >= 2 ? melhor(advsReais) : null;
+  const carrasco = advsReais.length >= 2 ? pior(advsReais) : null;
   const melhorCampo = campos.length >= 1 ? melhor(campos) : null;
   const goleada = [...jogos].filter(j => Number(j.placarNos) > Number(j.placarAdversario))
     .sort((a, b) => (b.placarNos - b.placarAdversario) - (a.placarNos - a.placarAdversario) || b.placarNos - a.placarNos || (b.data || "").localeCompare(a.data || ""))[0];
@@ -140,7 +143,7 @@ export function renderRetrospecto(root, state){
     </div>
 
     ${linhas || `<div class="empty-state"><h3>Sem partidas</h3><p>Nenhuma partida com placar para esse filtro.</p></div>`}
-    <p class="field-hint" style="margin-top:10px;">A barrinha mostra vitórias (verde), empates (cinza) e derrotas (vermelho). Aproveitamento = pontos conquistados (3 por vitória, 1 por empate) sobre o total possível. Freguês e carrasco consideram adversários com pelo menos 2 jogos.</p>
+    <p class="field-hint" style="margin-top:10px;">A barrinha mostra vitórias (verde), empates (cinza) e derrotas (vermelho). Aproveitamento = pontos conquistados (3 por vitória, 1 por empate) sobre o total possível. Freguês e carrasco consideram os adversários com mais jogos disputados (3 ou mais, quando houver).</p>
   `;
 
   $$(".rank-chip[data-aba]", root).forEach(b => b.addEventListener("click", () => { aba = b.dataset.aba; renderRetrospecto(root, state); }));
