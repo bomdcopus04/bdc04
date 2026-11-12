@@ -92,7 +92,7 @@ function extratoHtml(atleta, state, ano){
 
   const cards = jogos.map(j => {
     const res = resultadoJogo(j);
-    const badge = res === "vitoria" ? `<span class="badge badge-ok">Vitória</span>`
+    const badge = res === "vitoria" ? `<span class="badge badge-vit">Vitória</span>`
       : res === "derrota" ? `<span class="badge badge-danger">Derrota</span>`
       : res === "empate" ? `<span class="badge badge-off">Empate</span>` : "";
     const placar = res ? `${j.placarNos} x ${j.placarAdversario}` : "—";

@@ -4,7 +4,7 @@ import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis,
 import { abrevPosicao } from "./escalacao-ideal.js";
 
 const RESULTADO_BADGE = {
-  vitoria: `<span class="badge badge-ok">Vitória</span>`,
+  vitoria: `<span class="badge badge-vit">Vitória</span>`,
   empate: `<span class="badge badge-pending">Empate</span>`,
   derrota: `<span class="badge badge-danger">Derrota</span>`,
 };

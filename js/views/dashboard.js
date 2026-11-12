@@ -17,7 +17,7 @@ function renderQr(containerId, texto){
 }
 
 const RESULTADO_BADGE = {
-  vitoria: `<span class="badge badge-ok">V</span>`,
+  vitoria: `<span class="badge badge-vit">V</span>`,
   empate: `<span class="badge badge-pending">E</span>`,
   derrota: `<span class="badge badge-danger">D</span>`,
 };
@@ -25,6 +25,11 @@ const RESULTADO_BADGE = {
 let outsideClickHandler = null;
 
 let unsubPresenca = null;
+
+// "Damasco 1 x 4 BDC" (placar do adversário primeiro, como na súmula do rival).
+function tituloPlacar(j, nomeAdvTexto){
+  return `${nomeAdvTexto} ${j.placarAdversario ?? "–"} x ${j.placarNos ?? "–"} BDC`;
+}
 
 function pararPresenca(){ if (unsubPresenca){ unsubPresenca(); unsubPresenca = null; } }
 
@@ -126,6 +131,7 @@ export function renderDashboard(root, state){
 
   const nomeAdv = id => escapeHtml(state.adversarios.find(a => a.id === id)?.nome || "?");
   const nomeCampo = id => escapeHtml(state.campos.find(c => c.id === id)?.nome || "?");
+  const advTexto = id => state.adversarios.find(a => a.id === id)?.nome || "?";
   const appUrl = location.origin + location.pathname;
 
   const theme = getTheme();
@@ -206,7 +212,7 @@ export function renderDashboard(root, state){
     <div class="card card-pad dash-forma">
       <div>
         <div class="card-sub" style="margin-bottom:6px;">Forma recente (últimos ${recentesDesc.length} jogos)</div>
-        <div class="dash-dots">${[...recentesDesc].reverse().map(j => { const r = resultadoJogo(j); return `<span data-goto="${j.id}" style="cursor:pointer;">${r ? RESULTADO_BADGE[r] : "—"}</span>`; }).join("")}</div>
+        <div class="dash-dots">${[...recentesDesc].reverse().map(j => { const r = resultadoJogo(j); return `<span data-goto="${j.id}" style="cursor:pointer;" title="${escapeHtml(tituloPlacar(j, advTexto(j.adversarioId)))}">${r ? RESULTADO_BADGE[r] : "—"}</span>`; }).join("")}</div>
       </div>
       ${sequencia ? `<div class="dash-seq"><div class="dash-seq-val">${sequencia}</div><div class="card-sub" style="margin:0;">sequência atual</div></div>` : ""}
     </div>
@@ -236,7 +242,7 @@ export function renderDashboard(root, state){
           const res = resultadoJogo(j);
           return `
           <div class="event-row" style="cursor:pointer;" data-goto="${j.id}">
-            <span style="width:22px; flex-shrink:0;">${res ? RESULTADO_BADGE[res] : "—"}</span>
+            <span style="width:22px; flex-shrink:0;" title="${escapeHtml(tituloPlacar(j, advTexto(j.adversarioId)))}">${res ? RESULTADO_BADGE[res] : "—"}</span>
             <span style="flex:1;">vs ${nomeAdv(j.adversarioId)} <span style="color:var(--ink-faint); font-size:11px;">${formatDate(j.data)}</span></span>
             <span class="pill-num">${j.placarNos ?? "–"}x${j.placarAdversario ?? "–"}</span>
           </div>`;
