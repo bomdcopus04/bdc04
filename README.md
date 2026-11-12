@@ -1,5 +1,9 @@
 # Bom D' Copus — Gestão do Time
 
+Endereço do app: https://bomdcopus04.github.io/bdc04/
+(domínio `bomdcopus04.github.io` autorizado em Firebase Authentication)
+
+
 App web (HTML + JS puro) para gerenciar o time: adversários, campos, atletas,
 jogos, escalações, gols/assistências e avaliações pós-jogo — com dashboards,
 ranking de artilharia e escalação ideal calculada automaticamente.
