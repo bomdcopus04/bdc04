@@ -621,3 +621,9 @@ th.col-ativa, td.col-ativa{ background:rgba(228,182,43,.16); font-weight:700; }
 .hist-placar-val{font-family:var(--font-mono); font-size:22px; font-weight:700;}
 .hist-nota{font-size:11px; color:var(--gold); font-weight:600;}
 @media (max-width:700px){ .manchete-titulo{font-size:26px;} }
+
+/* Extrato: ficha do jogador */
+.fx-head{display:flex; align-items:center; gap:18px;}
+.fx-avatar{width:76px; height:76px; border-radius:50%; background:var(--gold); color:var(--gold-ink); display:flex; align-items:center; justify-content:center; font-family:'Bebas Neue',sans-serif; font-size:34px; letter-spacing:.04em; flex-shrink:0;}
+.kpi-rank{font-size:11px; color:rgba(255,255,255,.6); margin-top:2px;}
+@media (max-width:700px){ .fx-avatar{width:56px; height:56px; font-size:24px;} .fx-head{gap:12px;} }
