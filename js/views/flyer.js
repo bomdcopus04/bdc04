@@ -11,9 +11,16 @@ export const DOURADO = "#E4B62B";
 // Fundos disponíveis (preto e amarelo): cores usadas em todo o flyer.
 export const TEMAS = {
   noite: { nome: "Preto clássico", bg: "linear-gradient(180deg,#0d0d0d 0%,#1d1d1d 100%)", fg: "#ffffff", accent: DOURADO, muted: "#a9a9a9", muted2: "#cfcfcf", faint: "#5f5f5f", border: "none", ring: "transparent" },
-  listras: { nome: "Preto com listras e moldura", bg: "repeating-linear-gradient(135deg,#0e0e0e 0,#0e0e0e 70px,#191919 70px,#191919 140px)", fg: "#ffffff", accent: DOURADO, muted: "#b5b5b5", muted2: "#d8d8d8", faint: "#6a6a6a", border: `16px solid ${DOURADO}`, ring: "transparent" },
+  estadio: { nome: "Noite de estádio (gramado e refletores)", bg: "radial-gradient(ellipse at 50% 0%, rgba(228,182,43,.38) 0, rgba(228,182,43,0) 55%), radial-gradient(ellipse at 50% 100%, rgba(228,182,43,.22) 0, rgba(228,182,43,0) 50%), repeating-linear-gradient(0deg,#0b2b17 0,#0b2b17 100px,#0e3520 100px,#0e3520 200px)", fg: "#ffffff", accent: DOURADO, muted: "#b9d1c0", muted2: "#dbe9df", faint: "#6f8f78", border: "none", ring: "transparent", estadio: true },
   arte: { nome: "Preto com moldura (estilo do time)", bg: "#000000", fg: "#ffffff", accent: DOURADO, muted: "#b5b5b5", muted2: "#d8d8d8", faint: "#6a6a6a", border: "none", ring: "transparent", decor: true },
 };
+
+// Detalhes do tema "estádio": moldura dourada fina e marcações de campo (círculo
+// central e linha do meio) bem discretas ao fundo.
+const DECOR_ESTADIO = `
+  <div style="position:absolute; left:50%; top:50%; width:820px; height:820px; transform:translate(-50%,-50%); border:5px solid rgba(255,255,255,.07); border-radius:50%;"></div>
+  <div style="position:absolute; left:26px; right:26px; top:50%; height:5px; background:rgba(255,255,255,.07);"></div>
+  <div style="position:absolute; left:26px; top:26px; right:26px; bottom:26px; border:3px solid rgba(228,182,43,.55); border-radius:30px;"></div>`;
 
 const ESCUDO_MAX = 192; // px — pequeno de propósito (vai dentro do documento do adversário)
 
@@ -150,7 +157,7 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jo
   const base = `width:${W}px; height:${H}px; box-sizing:border-box; padding:80px 70px; background:${T.bg}; color:${T.fg}; border:${T.border}; font-family:'Inter',system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:space-between; position:relative; overflow:hidden;`;
   // Detalhes do tema "arte": riscos diagonais amarelos nos cantos.
   const risco = (css) => `<div style="position:absolute; height:6px; background:${DOURADO}; ${css}"></div>`;
-  const cantos = T.decor ? [
+  const cantos = T.estadio ? DECOR_ESTADIO : T.decor ? [
     risco("left:-60px; top:140px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),
     risco("left:-60px; top:215px; width:380px; transform:rotate(-45deg); transform-origin:left center;"),
     risco("left:-60px; top:290px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),
@@ -467,7 +474,7 @@ export function estruturaFlyer(tema, formato){
   const H = formato === "story" ? 1920 : 1350;
   const base = `width:${W}px; height:${H}px; box-sizing:border-box; padding:80px 70px; background:${T.bg}; color:${T.fg}; border:${T.border}; font-family:'Inter',system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:space-between; position:relative; overflow:hidden;`;
   const risco = (css) => `<div style="position:absolute; height:6px; background:${A}; ${css}"></div>`;
-  const cantos = T.decor ? [
+  const cantos = T.estadio ? DECOR_ESTADIO : T.decor ? [
     risco("left:-60px; top:140px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),
     risco("left:-60px; top:215px; width:380px; transform:rotate(-45deg); transform-origin:left center;"),
     risco("left:-60px; top:290px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),
