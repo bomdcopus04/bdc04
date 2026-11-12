@@ -241,6 +241,28 @@ function abrirImagemEscalacao({ formacao, titulo, periodo, linhas, suplentes }){
       ${e.rodape}</div>`;
   };
 
+  // Lista "XI inicial": goleiro primeiro, depois defesa, meio e ataque, com o
+  // escudo do time grande ao lado, centralizado na altura da lista.
+  const modeloXI = (e) => {
+    const story = e.H > 1500;
+    const fs = story ? 74 : 52;
+    const ordemXI = [...linhas].reverse().flatMap(l => l.jogadores);
+    const itens = ordemXI.map(j => `
+      <div style="display:flex; align-items:baseline; gap:22px; padding:${story ? 10 : 4}px 0;">
+        <span style="font-family:'Bebas Neue',sans-serif; font-size:${Math.round(fs * 0.8)}px; color:${e.A}; width:${Math.round(fs * 1.9)}px; flex-shrink:0; letter-spacing:.06em;">${escapeHtml(j.pos || "")}</span>
+        <span style="font-family:'Bebas Neue',sans-serif; font-size:${fs}px; line-height:1.05; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(j.nome.toUpperCase())}</span>
+      </div>`).join("");
+    return `<div style="${e.base}">${e.cantos}${e.topo}${cabecalho(e)}
+      <div style="width:100%; display:flex; align-items:center; justify-content:space-between; gap:20px;">
+        <div style="flex:1; min-width:0;">${itens}</div>
+        <div style="flex:0 0 ${story ? 380 : 340}px; display:flex; align-items:center; justify-content:center;">
+          <img src="assets/logo-bomdcopus.png" style="width:${story ? 360 : 320}px; height:${story ? 360 : 320}px; border-radius:50%; object-fit:cover; box-shadow:0 0 0 6px ${e.A};">
+        </div>
+      </div>
+      ${blocoSuplentes(e, story ? 26 : 22)}
+      ${e.rodape}</div>`;
+  };
+
   const legenda = [`⚽ ${titulo} — ${formacao} (${periodo})`, "",
     ...linhas.map(l => `${l.label}: ${l.jogadores.map(j => j.nome).join(", ")}`),
     ...(suplentes.length ? ["", `Suplentes: ${suplentes.map(x => x.nome).join(", ")}`] : []),
@@ -250,8 +272,8 @@ function abrirImagemEscalacao({ formacao, titulo, periodo, linhas, suplentes }){
     titulo: "Imagem da escalação",
     arquivo: `escalacao-${formacao}`,
     legenda,
-    selecao: { label: "Modelo", padrao: "campo", opcoes: [{ value: "campo", label: "Campo" }, { value: "lista", label: "Lista por setor" }, { value: "cartoes", label: "Cartões" }] },
-    render: (e) => e.selecaoId === "lista" ? modeloLista(e) : e.selecaoId === "cartoes" ? modeloCartoes(e) : modeloCampo(e),
+    selecao: { label: "Modelo", padrao: "campo", opcoes: [{ value: "campo", label: "Campo" }, { value: "lista", label: "Lista por setor" }, { value: "cartoes", label: "Cartões" }, { value: "xi", label: "Lista XI inicial" }] },
+    render: (e) => e.selecaoId === "xi" ? modeloXI(e) : e.selecaoId === "lista" ? modeloLista(e) : e.selecaoId === "cartoes" ? modeloCartoes(e) : modeloCampo(e),
   });
 }
 
