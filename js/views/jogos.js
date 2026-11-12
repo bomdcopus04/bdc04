@@ -5,12 +5,15 @@ import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA
 
 import { linkPresenca } from "./presenca.js";
 import { openFlyerModal } from "./flyer.js";
+import { MESES } from "../filters.js";
 
 export const TIPOS_PARTIDA = ["Amistoso", "Festival", "Campeonato"];
 
 let activeTab = "escalacao-inicial";
 let lastJogoId = null;
 let searchJogos = "";
+let filtroStatusJogos = "todos"; // todos | agendados | realizados
+let filtroTipoJogos = "";
 // Índice do evento de gol/assistência em edição (null = formulário de novo evento).
 let editandoEvt = null;
 
@@ -150,31 +153,76 @@ export function renderJogosList(root, state){
 
   const todos = [...state.jogos].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   const termo = searchJogos.toLowerCase();
-  const jogos = termo
-    ? todos.filter(j =>
-        nomeAdv(j.adversarioId).toLowerCase().includes(termo) ||
-        nomeCampo(j.campoId).toLowerCase().includes(termo) ||
-        (j.tipoPartida || "").toLowerCase().includes(termo))
-    : todos;
+  const passa = (j) =>
+    (!filtroTipoJogos || j.tipoPartida === filtroTipoJogos) &&
+    (!termo ||
+      nomeAdv(j.adversarioId).toLowerCase().includes(termo) ||
+      nomeCampo(j.campoId).toLowerCase().includes(termo) ||
+      (j.tipoPartida || "").toLowerCase().includes(termo));
+  const hoje = todayISO();
+  const agendadosTodos = todos.filter(j => j.status !== "realizado").sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+  const realizadosTodos = todos.filter(j => j.status === "realizado");
+  const agendados = filtroStatusJogos === "realizados" ? [] : agendadosTodos.filter(passa);
+  const realizados = filtroStatusJogos === "agendados" ? [] : realizadosTodos.filter(passa);
 
-  const rows = jogos.map(j => {
-    const placar = j.status === "realizado" && j.placarNos !== null && j.placarNos !== undefined
-      ? `<span class="pill-num">${j.placarNos} x ${j.placarAdversario ?? 0}</span>${desempateJogo(j) ? ` <small style="color:var(--ink-faint);">${escapeHtml(desempateJogo(j).texto)}</small>` : ""}` : "—";
-    const statusBadge = j.status === "realizado"
-      ? `<span class="badge badge-ok">Realizado</span>`
-      : `<span class="badge badge-pending">Agendado</span>`;
+  // ---- Manchete: o calendário em uma frase ----
+  const proximo = agendadosTodos.find(j => (j.data || "") >= hoje) || agendadosTodos[0] || null;
+  const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+  const dias = (iso) => {
+    if (!iso) return null;
+    const [y, m, d] = iso.split("-").map(Number);
+    const h = new Date(); h.setHours(0, 0, 0, 0);
+    return Math.round((new Date(y, m - 1, d) - h) / 86400000);
+  };
+  const txtDias = (n) => n === null ? "" : n === 0 ? "hoje" : n === 1 ? "amanhã" : n < 0 ? `${-n} dia${n === -1 ? "" : "s"} atrás` : `em ${n} dias`;
+  const manchete = `
+    <div class="manchete">
+      <div class="manchete-eyebrow">Calendário</div>
+      <div class="manchete-titulo">${agendadosTodos.length ? plural(agendadosTodos.length, "jogo agendado", "jogos agendados") : "Nenhum jogo agendado"}</div>
+      <div class="manchete-sub">${proximo ? `Próximo: vs ${escapeHtml(nomeAdv(proximo.adversarioId))}, ${formatDate(proximo.data)} (${txtDias(dias(proximo.data))})${nomeCampo(proximo.campoId) ? ` · ${escapeHtml(nomeCampo(proximo.campoId))}` : ""}` : "Cadastre o próximo jogo para abrir a confirmação de presença."} · ${plural(realizadosTodos.length, "partida realizada", "partidas realizadas")} na história</div>
+    </div>`;
+
+  const tipos = [...new Set(todos.map(j => j.tipoPartida).filter(Boolean))];
+
+  const cartaoAgendado = (j) => {
+    const [y, m, d] = (j.data || "0000-00-00").split("-");
+    const n = dias(j.data);
     return `
-      <tr class="clickable" data-id="${j.id}">
-        <td>${formatDate(j.data)}</td>
-        <td><strong>${escapeHtml(nomeAdv(j.adversarioId) || "—")}</strong></td>
-        <td>${escapeHtml(nomeCampo(j.campoId) || "—")}</td>
-        <td>${escapeHtml(j.tipoPartida || "—")}</td>
-        <td>${placar}</td>
-        <td>${statusBadge}</td>
-      </tr>`;
-  }).join("");
+      <div class="hist-card" data-id="${j.id}">
+        <div class="jogo-data"><div class="jogo-dia">${d}</div><div class="jogo-mes">${MESES[Number(m) - 1]?.slice(0, 3).toUpperCase() || ""}</div></div>
+        <div class="hist-info">
+          <div class="hist-adv">vs ${escapeHtml(nomeAdv(j.adversarioId) || "—")}</div>
+          <div class="hist-meta">${j.horario ? `${escapeHtml(j.horario)} · ` : ""}${escapeHtml(nomeCampo(j.campoId) || "—")}${j.tipoPartida ? ` · ${escapeHtml(j.tipoPartida)}` : ""}</div>
+        </div>
+        <div class="hist-placar"><span class="badge badge-pending">${txtDias(n) || "Agendado"}</span></div>
+      </div>`;
+  };
+  const cartaoRealizado = (j) => {
+    const r = resultadoJogo(j);
+    const info = { vitoria: ["V", "res-v"], empate: ["E", "res-e"], derrota: ["D", "res-d"] }[r];
+    const dsp = desempateJogo(j);
+    return `
+      <div class="hist-card" data-id="${j.id}">
+        <div class="hist-res ${info ? info[1] : ""}">${info ? info[0] : "—"}</div>
+        <div class="hist-info">
+          <div class="hist-adv">vs ${escapeHtml(nomeAdv(j.adversarioId) || "—")}</div>
+          <div class="hist-meta">${formatDate(j.data)} · ${escapeHtml(nomeCampo(j.campoId) || "—")}${j.tipoPartida ? ` · ${escapeHtml(j.tipoPartida)}` : ""}${dsp ? ` · ${escapeHtml(dsp.texto)}` : ""}</div>
+        </div>
+        <div class="hist-placar"><div class="hist-placar-val">${j.placarNos ?? "–"} x ${j.placarAdversario ?? "–"}</div></div>
+      </div>`;
+  };
 
-  const emptyMsg = termo ? `Nenhum jogo encontrado para "${escapeHtml(searchJogos)}".` : "Nenhum jogo cadastrado ainda.";
+  // Realizados agrupados por mês, como no Histórico.
+  const gruposReal = [];
+  realizados.forEach(j => {
+    const chave = (j.data || "").slice(0, 7);
+    let g = gruposReal[gruposReal.length - 1];
+    if (!g || g.chave !== chave){ g = { chave, jogos: [] }; gruposReal.push(g); }
+    g.jogos.push(j);
+  });
+
+  const vazio = !agendados.length && !realizados.length;
+  const emptyMsg = termo || filtroTipoJogos ? "Nenhum jogo encontrado com esses filtros." : "Nenhum jogo cadastrado ainda.";
 
   root.innerHTML = `
     <div class="topbar">
@@ -184,26 +232,44 @@ export function renderJogosList(root, state){
       </div>
       <button class="btn btn-primary" id="btn-new-jogo">+ Novo jogo</button>
     </div>
-    <div class="field" style="max-width:320px; margin-bottom:16px;">
-      <label>Buscar por adversário, campo ou tipo</label>
-      <input type="text" id="input-busca" placeholder="Digite pra filtrar…" value="${escapeHtml(searchJogos)}">
+
+    ${manchete}
+
+    <div class="rank-chips">
+      ${[["todos", "Todos"], ["agendados", "Agendados"], ["realizados", "Realizados"]].map(([k, l]) => `<button class="rank-chip ${filtroStatusJogos === k ? "active" : ""}" data-status="${k}" type="button">${l}</button>`).join("")}
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Data</th><th>Adversário</th><th>Campo</th><th>Tipo</th><th>Placar</th><th>Status</th></tr></thead>
-        <tbody>${rows || `<tr class="empty-row"><td colspan="6">${emptyMsg}</td></tr>`}</tbody>
-      </table>
+    <div class="rank-filtros" style="max-width:640px;">
+      <div class="field">
+        <label>Tipo de partida</label>
+        <select id="filtro-tipo-jogo">
+          <option value="">Todos</option>
+          ${tipos.map(t => `<option value="${escapeHtml(t)}" ${t === filtroTipoJogos ? "selected" : ""}>${escapeHtml(t)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label>Buscar por adversário, campo ou tipo</label>
+        <input type="text" id="input-busca" placeholder="Digite pra filtrar…" value="${escapeHtml(searchJogos)}">
+      </div>
     </div>
+
+    ${vazio ? `<div class="empty-state"><h3>Nenhuma partida</h3><p>${emptyMsg}</p></div>` : ""}
+    ${agendados.length ? `<div class="hist-mes" style="margin-top:6px;">Agendados <span>${plural(agendados.length, "jogo", "jogos")}</span></div>${agendados.map(cartaoAgendado).join("")}` : ""}
+    ${gruposReal.map(g => {
+      const [ya, ma] = g.chave.split("-").map(Number);
+      return `<div class="hist-mes">${MESES[ma - 1]} de ${ya} <span>${plural(g.jogos.length, "jogo", "jogos")}</span></div>${g.jogos.map(cartaoRealizado).join("")}`;
+    }).join("")}
   `;
 
   $("#input-busca", root)?.addEventListener("input", (e) => {
     searchJogos = e.target.value;
     reRenderKeepingFocus(root, () => renderJogosList(root, state));
   });
+  $("#filtro-tipo-jogo", root)?.addEventListener("change", (e) => { filtroTipoJogos = e.target.value; renderJogosList(root, state); });
+  $$(".rank-chip[data-status]", root).forEach(b => b.addEventListener("click", () => { filtroStatusJogos = b.dataset.status; renderJogosList(root, state); }));
 
   $("#btn-new-jogo").addEventListener("click", () => openJogoForm(state, null, (newId) => { location.hash = `#jogos/${newId}`; }));
-  $$("tbody tr[data-id]", root).forEach(tr => {
-    tr.addEventListener("click", () => { location.hash = `#jogos/${tr.dataset.id}`; });
+  $$(".hist-card[data-id]", root).forEach(el => {
+    el.addEventListener("click", () => { location.hash = `#jogos/${el.dataset.id}`; });
   });
 }
 
@@ -238,13 +304,31 @@ export function renderJogoDetail(root, state, jogoId){
   const campo = state.campos.find(c => c.id === jogo.campoId);
   const resultado = resultadoJogo(jogo);
 
+  // Faixa de contexto abaixo do placar: contagem regressiva e confirmações
+  // (jogo agendado) ou quem fez os gols (jogo realizado).
+  let faixaJogo = "";
+  if (jogo.status !== "realizado"){
+    const [fy, fm, fd] = (jogo.data || "").split("-").map(Number);
+    const h0 = new Date(); h0.setHours(0, 0, 0, 0);
+    const nd = jogo.data ? Math.round((new Date(fy, fm - 1, fd) - h0) / 86400000) : null;
+    const vou = (presencasJogo || []).filter(p => p.resposta === "vou").length;
+    const talvez = (presencasJogo || []).filter(p => p.resposta === "talvez").length;
+    const quando = nd === null ? "" : nd === 0 ? "É hoje" : nd === 1 ? "É amanhã" : nd < 0 ? `Data passada há ${-nd} dia${nd === -1 ? "" : "s"} — lembre de marcar como realizado` : `Faltam ${nd} dias`;
+    faixaJogo = `<div class="jogo-faixa"><strong>${quando}</strong>${presencasJogo ? ` · ${vou} confirmado${vou === 1 ? "" : "s"}${talvez ? `, ${talvez} talvez` : ""}` : ""}</div>`;
+  } else {
+    const cont = {};
+    (jogo.golsAssistencias || []).forEach(e => { if (e.atletaGolId && e.atletaGolId !== GOL_CONTRA_ID) cont[e.atletaGolId] = (cont[e.atletaGolId] || 0) + 1; });
+    const lista = Object.entries(cont).sort((a, b) => b[1] - a[1]).map(([id, n]) => `${state.atletas.find(x => x.id === id)?.nome || "?"}${n > 1 ? ` (${n})` : ""}`);
+    if (lista.length) faixaJogo = `<div class="jogo-faixa">⚽ <strong>Gols:</strong> ${escapeHtml(lista.join(", "))}</div>`;
+  }
+
   root.innerHTML = `
     <div class="topbar">
       <div>
         <a href="#jogos" style="font-size:12px; color:var(--pitch); font-weight:600; text-decoration:none;">&larr; Partidas</a>
         <h1 style="margin-top:4px;">Bom D' Copus vs ${escapeHtml(adv?.nome || "?")}</h1>
       </div>
-      <div style="display:flex; gap:8px;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
         <button class="btn btn-ghost" id="btn-flyer">Gerar imagem</button>
         <button class="btn btn-ghost" id="btn-presenca-link">Copiar link de presença</button>
         <button class="btn btn-ghost" id="btn-presenca">Ver presença</button>
@@ -264,6 +348,8 @@ export function renderJogoDetail(root, state, jogoId){
         <span>${jogo.status === "realizado" ? (resultado ? { vitoria: "🏆 Vitória", empate: "➖ Empate", derrota: "❌ Derrota" }[resultado] : "Realizado") : "🗓️ Agendado"}</span>
       </div>
     </div>
+
+    ${faixaJogo}
 
     <div class="tabbar">
       <button class="tab-btn" data-tab="escalacao-inicial">Escalação inicial</button>

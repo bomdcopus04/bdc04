@@ -67,6 +67,7 @@ function idMensalidade(mesRef, atletaId){
 // restante do histórico (conforme os meses forem se acumulando) fica só no
 // botão "Ver todas". No mobile, 3 é o que cabe lado a lado sem espremer.
 const MESES_VISIVEIS_TELA = 3;
+let mostrarTodasTransacoes = false;
 
 // Monta o "tile" de um mês (nome + quantas mensalidades já foram pagas) —
 // usado tanto na tela principal quanto nos modais de meses futuros/todos.
@@ -80,6 +81,7 @@ function mesTileHtml(mesRef, transacoes, pagantesAtivos){
     <button type="button" class="mes-tile" data-mes="${mesRef}">
       <div class="mes-nome">${mesLabel(mesRef)}</div>
       <div class="mes-sub">${pagos}/${base.length} pagas</div>
+      <div class="mes-bar"><span style="width:${base.length ? Math.round(pagos / base.length * 100) : 0}%"></span></div>
     </button>`;
 }
 
@@ -773,6 +775,51 @@ export function renderFinanceiro(root, state){
       </tr>`;
   }).join("");
 
+  // ---- Manchete: como está o caixa do mês ----
+  const mesAtual = mesAtualRef();
+  const valorMens = state.configFinanceiro?.valorMensalidade ?? 0;
+  const baseMes = pagantesAtivos.filter(a => pagouMes(transacoes, mesAtual, a.id)
+    || (inicioPagamento(a) <= mesAtual && !isentoMes(transacoes, mesAtual, a.id)));
+  const pagosMes = baseMes.filter(a => pagouMes(transacoes, mesAtual, a.id));
+  const devedoresMes = baseMes.filter(a => !pagouMes(transacoes, mesAtual, a.id));
+  const doMes = transacoes.filter(t => (t.data || "").startsWith(mesAtual) && t.tipo !== "isencao");
+  const entradasMes = doMes.filter(t => t.tipo !== "saida").reduce((t, x) => t + (x.valor || 0), 0);
+  const saidasMes = doMes.filter(t => t.tipo === "saida").reduce((t, x) => t + (x.valor || 0), 0);
+  const pctMes = baseMes.length ? Math.round(pagosMes.length / baseMes.length * 100) : 0;
+  const nomesDev = devedoresMes.slice(0, 4).map(a => a.nome).join(", ") + (devedoresMes.length > 4 ? ` e mais ${devedoresMes.length - 4}` : "");
+  const manchete = `
+    <div class="manchete">
+      <div class="manchete-eyebrow">Caixa de ${mesLabel(mesAtual)}</div>
+      <div class="manchete-titulo">${pagosMes.length} de ${baseMes.length} mensalidades pagas (${pctMes}%)</div>
+      <div class="manchete-sub">Entraram ${fmtBRL(entradasMes)} e saíram ${fmtBRL(saidasMes)} no mês${valorMens ? ` · previsto em mensalidades: ${fmtBRL(baseMes.length * valorMens)}` : ""}${devedoresMes.length ? ` · faltam: ${escapeHtml(nomesDev)}` : " · todo mundo em dia"}</div>
+      <div class="av-barra"><span style="width:${pctMes}%"></span></div>
+    </div>`;
+
+  const limite = mostrarTodasTransacoes ? historicoOrdenado.length : 20;
+  const historicoCards = historicoOrdenado.slice(0, limite).map(t => {
+    const tipoLabel = t.tipo === "entrada" ? "Entrada" : t.tipo === "saida" ? "Saída" : "Mensalidade";
+    const resCls = t.tipo === "saida" ? "res-d" : t.tipo === "mensalidade" ? "res-e" : "res-v";
+    const sinal = t.tipo === "saida" ? "−" : "+";
+    const desc = t.descricao || (t.tipo === "mensalidade" && atletasPorId[t.atletaId]
+      ? `Mensalidade — ${atletasPorId[t.atletaId].nome}`
+      : "—");
+    return `
+      <div class="hist-card fin-linha">
+        <div class="hist-res ${resCls}">${sinal}</div>
+        <div class="hist-info">
+          <div class="hist-adv" style="white-space:normal;">${escapeHtml(desc)}</div>
+          <div class="hist-meta">${formatDate(t.data)} · ${tipoLabel}</div>
+        </div>
+        <div class="hist-placar">
+          <div class="hist-placar-val" style="${t.tipo === "saida" ? "color:var(--danger);" : "color:var(--vit);"}">${sinal} ${fmtBRL(t.valor || 0)}</div>
+          <div style="margin-top:4px;">
+            <button class="btn btn-ghost btn-sm btn-editar-transacao" data-id="${t.id}" type="button">Editar</button>
+            <button class="btn btn-ghost btn-sm btn-excluir-transacao" data-id="${t.id}" type="button">Excluir</button>
+          </div>
+        </div>
+      </div>`;
+  }).join("");
+
   root.innerHTML = `
     <div class="topbar">
       <div>
@@ -780,6 +827,8 @@ export function renderFinanceiro(root, state){
         <h1>Financeiro</h1>
       </div>
     </div>
+
+    ${manchete}
 
     <div class="saldo-hero">
       <div class="lbl">Saldo atual</div>
@@ -815,16 +864,11 @@ export function renderFinanceiro(root, state){
     </div>
 
     <h2 style="font-size:18px; margin:26px 0 12px;">Histórico de transações</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th></th></tr></thead>
-        <tbody>
-          ${historicoRows || `<tr class="empty-row"><td colspan="5">Nenhuma transação lançada ainda.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
+    ${historicoCards || `<div class="empty-state"><p>Nenhuma transação lançada ainda.</p></div>`}
+    ${historicoOrdenado.length > 20 ? `<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" id="btn-mais-transacoes" type="button">${mostrarTodasTransacoes ? "Mostrar só as 20 mais recentes" : `Mostrar todas (${historicoOrdenado.length})`}</button></div>` : ""}
   `;
 
+  $("#btn-mais-transacoes", root)?.addEventListener("click", () => { mostrarTodasTransacoes = !mostrarTodasTransacoes; renderFinanceiro(root, state); });
   $("#btn-pendencias", root).addEventListener("click", () => openPendencias(state));
   $("#btn-extrato-jogador", root).addEventListener("click", () => openExtratoJogador(state));
   $("#btn-entrada", root).addEventListener("click", () => openTransacaoForm("entrada"));

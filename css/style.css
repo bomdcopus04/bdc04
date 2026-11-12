@@ -668,3 +668,12 @@ th.col-ativa, td.col-ativa{ background:rgba(228,182,43,.16); font-weight:700; }
 .tro-nome{font-family:'Bebas Neue',sans-serif; font-size:30px; letter-spacing:.03em; line-height:1.1;}
 .tro-val{font-family:var(--font-mono); font-size:18px; font-weight:700; color:var(--gold); margin:2px 0 6px;}
 .tro-outros{font-size:12px; color:var(--ink-faint); line-height:1.4;}
+
+/* Partidas e Financeiro */
+.jogo-data{width:46px; height:46px; border-radius:12px; border:1.5px solid var(--gold); display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0; line-height:1;}
+.jogo-dia{font-family:'Bebas Neue',sans-serif; font-size:22px;}
+.jogo-mes{font-size:9.5px; letter-spacing:.08em; color:var(--gold); font-weight:700;}
+.jogo-faixa{font-size:13.5px; color:var(--ink-soft); margin:-4px 0 16px;}
+.mes-bar{height:4px; background:var(--line, rgba(128,128,128,.25)); border-radius:2px; margin-top:6px; overflow:hidden;}
+.mes-bar span{display:block; height:4px; background:var(--gold);}
+.fin-linha{cursor:default !important; flex-wrap:wrap;}

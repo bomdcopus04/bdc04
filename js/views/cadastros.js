@@ -238,6 +238,12 @@ function renderCrudView(root, opts, state){
         <button class="btn btn-primary" id="btn-new">+ Novo(a) ${opts.singular}</button>
       </div>
     </div>
+    ${opts.manchete ? (() => { const m = opts.manchete(items, state); return `
+    <div class="manchete">
+      <div class="manchete-eyebrow">${escapeHtml(m.eyebrow)}</div>
+      <div class="manchete-titulo">${escapeHtml(m.titulo)}</div>
+      <div class="manchete-sub">${escapeHtml(m.sub)}</div>
+    </div>`; })() : ""}
     <div class="field" style="max-width:320px; margin-bottom:16px;">
       <label>Buscar por nome</label>
       <input type="text" id="input-busca" placeholder="Digite pra filtrar…" value="${escapeHtml(searchTerm)}">
@@ -300,21 +306,30 @@ export const CATEGORIAS_ATLETA = [...POSICOES, POSICAO_TECNICO];
 // Hub que agrupa Atletas/Adversários/Campos numa tela só — no mobile isso
 // substitui 3 ícones separados no menu inferior por 1 só (evita menu apertado).
 export function renderCadastrosHub(root, state){
+  const ativos = state.atletas.filter(a => a.ativo !== false);
+  const semPos = ativos.filter(a => !a.posicao).length;
+  const agendados = state.jogos.filter(j => j.status !== "realizado").length;
+  const realizados = state.jogos.length - agendados;
+  const contAdv = contagemJogosPorAdversario(state.jogos);
+  const contCampo = contagemJogosPorCampo(state.jogos);
+  const advSem = state.adversarios.filter(a => !contAdv[a.id]).length;
+  const campoSem = state.campos.filter(c => !contCampo[c.id]).length;
+
   const itens = [
     {
-      route: "jogos", label: "Partidas", desc: `${state.jogos.length} registrada(s)`,
+      route: "jogos", label: "Partidas", desc: `${agendados} agendada${agendados === 1 ? "" : "s"} · ${realizados} realizada${realizados === 1 ? "" : "s"}`,
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>`,
     },
     {
-      route: "atletas", label: "Atletas", desc: `${state.atletas.length} cadastrado(s)`,
+      route: "atletas", label: "Atletas", desc: `${ativos.length} ativo${ativos.length === 1 ? "" : "s"}${semPos ? ` · ${semPos} sem posição` : " · elenco completo"}`,
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.5"/><path d="M5 21c0-4 3-6.5 7-6.5s7 2.5 7 6.5"/></svg>`,
     },
     {
-      route: "adversarios", label: "Adversários", desc: `${state.adversarios.length} cadastrado(s)`,
+      route: "adversarios", label: "Adversários", desc: `${state.adversarios.length} cadastrado${state.adversarios.length === 1 ? "" : "s"}${advSem ? ` · ${advSem} sem jogos` : ""}`,
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V4l8 4 8-4v17"/><path d="M4 21h16"/></svg>`,
     },
     {
-      route: "campos", label: "Campos", desc: `${state.campos.length} cadastrado(s)`,
+      route: "campos", label: "Campos", desc: `${state.campos.length} cadastrado${state.campos.length === 1 ? "" : "s"}${campoSem ? ` · ${campoSem} sem jogos` : ""}`,
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="1"/><circle cx="12" cy="12" r="2.4"/><path d="M12 6v12M3 9h3v6H3M18 9h3v6h-3"/></svg>`,
     },
   ];
@@ -326,13 +341,18 @@ export function renderCadastrosHub(root, state){
         <h1>Cadastros</h1>
       </div>
     </div>
+    <div class="manchete">
+      <div class="manchete-eyebrow">A base do time</div>
+      <div class="manchete-titulo">${ativos.length} atletas, ${state.adversarios.length} adversários e ${state.campos.length} campos</div>
+      <div class="manchete-sub">${realizados} partida${realizados === 1 ? "" : "s"} realizada${realizados === 1 ? "" : "s"} e ${agendados} agendada${agendados === 1 ? "" : "s"}${semPos ? ` · atenção: ${semPos} atleta${semPos === 1 ? "" : "s"} sem posição definida` : ""}</div>
+    </div>
     <div class="dashboard-grid-3">
       ${itens.map(it => `
         <a href="#${it.route}" class="card card-pad" style="display:flex; align-items:center; gap:14px; text-decoration:none;">
           <div style="width:44px; height:44px; border-radius:50%; background:var(--pitch-light); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--pitch);">${it.icon}</div>
           <div style="min-width:0;">
             <div class="card-title" style="margin-bottom:2px;">${it.label}</div>
-            <div class="card-sub" style="margin-bottom:0;">${it.desc}</div>
+            <div class="card-sub" style="margin-bottom:0;">${escapeHtml(it.desc)}</div>
           </div>
         </a>`).join("")}
     </div>
@@ -346,6 +366,19 @@ export function renderAtletas(root, state){
     singular: "Atleta",
     plural: "Atletas",
     columnToggle: true,
+    manchete: (items) => {
+      const ativos = items.filter(a => a.ativo !== false);
+      const por = {};
+      ativos.forEach(a => { if (POSICOES.includes(a.posicao)) por[a.posicao] = (por[a.posicao] || 0) + 1; });
+      const plur = { Goleiro: "goleiros", Zagueiro: "zagueiros", Lateral: "laterais", Volante: "volantes", Meia: "meias", Atacante: "atacantes" };
+      const sem = ativos.filter(a => !a.posicao).length;
+      const dist = POSICOES.filter(p => por[p]).map(p => `${por[p]} ${plur[p]}`).join(", ");
+      return {
+        eyebrow: "Elenco",
+        titulo: `${ativos.length} atleta${ativos.length === 1 ? "" : "s"} ativo${ativos.length === 1 ? "" : "s"}${items.length > ativos.length ? ` (${items.length - ativos.length} inativo${items.length - ativos.length === 1 ? "" : "s"})` : ""}`,
+        sub: `${ativos.filter(a => a.pagante).length} pagantes · ${ativos.filter(a => a.podeVotar).length} com direito a voto${dist ? ` · ${dist}` : ""}${sem ? ` · ${sem} sem posição definida` : ""}`,
+      };
+    },
     fields: [
       { key: "nome", label: "Nome", type: "text", required: true, span2: true },
       { key: "nomeCompleto", label: "Nome completo", type: "text", span2: true },
@@ -390,6 +423,16 @@ export function renderAdversarios(root, state){
     collectionName: "adversarios",
     singular: "Adversário",
     plural: "Adversários",
+    manchete: (items, state) => {
+      const cont = contagemJogosPorAdversario(state.jogos);
+      const top = [...items].sort((a, b) => (cont[b.id] || 0) - (cont[a.id] || 0))[0];
+      const sem = items.filter(a => !cont[a.id]).length;
+      return {
+        eyebrow: "Rivais",
+        titulo: `${items.length} adversário${items.length === 1 ? "" : "s"} cadastrado${items.length === 1 ? "" : "s"}`,
+        sub: `${top && cont[top.id] ? `Mais enfrentado: ${top.nome} (${cont[top.id]} jogo${cont[top.id] === 1 ? "" : "s"})` : "Nenhum jogo registrado ainda"}${sem ? ` · ${sem} ainda sem jogos` : ""}`,
+      };
+    },
     fields: [
       { key: "nome", label: "Nome do time", type: "text", required: true, span2: true },
       { key: "cidade", label: "Cidade", type: "text" },
@@ -412,6 +455,16 @@ export function renderCampos(root, state){
     collectionName: "campos",
     singular: "Campo",
     plural: "Campos",
+    manchete: (items, state) => {
+      const cont = contagemJogosPorCampo(state.jogos);
+      const top = [...items].sort((a, b) => (cont[b.id] || 0) - (cont[a.id] || 0))[0];
+      const sem = items.filter(c => !cont[c.id]).length;
+      return {
+        eyebrow: "Onde jogamos",
+        titulo: `${items.length} campo${items.length === 1 ? "" : "s"} cadastrado${items.length === 1 ? "" : "s"}`,
+        sub: `${top && cont[top.id] ? `Mais usado: ${top.nome} (${cont[top.id]} jogo${cont[top.id] === 1 ? "" : "s"})` : "Nenhum jogo registrado ainda"}${sem ? ` · ${sem} ainda sem jogos` : ""}`,
+      };
+    },
     fields: [
       { key: "nome", label: "Nome do campo", type: "text", required: true, span2: true },
       { key: "endereco", label: "Endereço", type: "text", span2: true },
