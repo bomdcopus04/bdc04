@@ -596,3 +596,28 @@ th.col-ativa, td.col-ativa{ background:rgba(228,182,43,.16); font-weight:700; }
   .rank-chips{flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px;}
   .rank-chip{flex:0 0 auto;}
 }
+
+/* Manchete (frase de destaque no topo das telas de relatório) */
+.manchete{background:#14171C; color:#fff; border-radius:14px; padding:18px 22px; margin-bottom:20px;}
+.manchete-eyebrow{font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--gold); font-weight:700;}
+.manchete-titulo{font-family:'Bebas Neue',sans-serif; font-size:32px; letter-spacing:.03em; line-height:1.15; margin:6px 0 4px;}
+.manchete-sub{font-size:13.5px; color:rgba(255,255,255,.75); line-height:1.5;}
+.manchete-ult{font-size:12.5px; color:var(--gold); margin-top:8px;}
+
+/* Histórico em linha do tempo */
+.hist-mes{font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:.05em; margin:22px 0 8px; color:var(--heading, var(--ink));}
+.hist-mes span{font-family:inherit; font-size:12px; letter-spacing:.04em; color:var(--ink-faint); margin-left:8px; font-family:'Inter',system-ui,sans-serif; font-weight:600;}
+.hist-card{display:flex; align-items:center; gap:14px; background:var(--card, #fff); border:1px solid var(--line, rgba(128,128,128,.25)); border-radius:12px; padding:12px 14px; margin-bottom:8px; cursor:pointer;}
+.hist-card:hover{border-color:var(--gold);}
+.hist-res{width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0;}
+.hist-res.res-v{background:var(--vit-bg); color:var(--vit);}
+.hist-res.res-e{background:var(--pending-bg); color:var(--pending-ink);}
+.hist-res.res-d{background:var(--danger-bg); color:var(--danger);}
+.hist-info{flex:1; min-width:0;}
+.hist-adv{font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.hist-meta{font-size:12px; color:var(--ink-faint);}
+.hist-gols{font-size:12px; color:var(--ink-soft); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.hist-placar{text-align:right; flex-shrink:0;}
+.hist-placar-val{font-family:var(--font-mono); font-size:22px; font-weight:700;}
+.hist-nota{font-size:11px; color:var(--gold); font-weight:600;}
+@media (max-width:700px){ .manchete-titulo{font-size:26px;} }

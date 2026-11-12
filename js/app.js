@@ -177,7 +177,7 @@ function render(){
   if (route === "extrato"){ renderExtrato(root, state, subId); return; }
   if (route === "presenca"){ renderPresenca(root, state, subId); return; }
   const fn = ROUTES[route];
-  if (fn) fn(root, state);
+  if (fn) fn(root, state, subId);
   else renderDashboard(root, state);
 }
 

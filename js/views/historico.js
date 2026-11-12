@@ -1,25 +1,26 @@
-import { $, $$, escapeHtml, formatDate, formatDateLong, openModal, closeModal, fmt1, avg, sortRows, sortableTh, wireSortableHeaders, reRenderKeepingFocus, toast } from "../utils.js";
-import { resultadoJogo, normalizeEscalacao, notasDoAtletaNoJogo, jogosRealizados, GOL_CONTRA_ID } from "../stats.js";
+import { $, $$, escapeHtml, formatDate, formatDateLong, openModal, closeModal, fmt1, avg, reRenderKeepingFocus, toast } from "../utils.js";
+import { resultadoJogo, normalizeEscalacao, notasDoAtletaNoJogo, jogosRealizados, mediaNotaJogadoresNoJogo, GOL_CONTRA_ID } from "../stats.js";
 import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
 import { abrevPosicao } from "./escalacao-ideal.js";
 
-const RESULTADO_BADGE = {
-  vitoria: `<span class="badge badge-vit">Vitória</span>`,
-  empate: `<span class="badge badge-pending">Empate</span>`,
-  derrota: `<span class="badge badge-danger">Derrota</span>`,
-};
-
-const RESULTADO_ORDEM = { vitoria: 2, empate: 1, derrota: 0 };
-
-// Ordem das posições no campo, usada pra ordenar a lista de escalação na
-// súmula (GOL, ZAG, LAT, VOL, MEI, ATA) — posições fora dessa lista (ou não
-// informadas) vão pro final.
 const ORDEM_POSICAO = { "Goleiro": 0, "Zagueiro": 1, "Lateral": 2, "Volante": 3, "Meia": 4, "Atacante": 5 };
 
-const sortState = { key: null, dir: "asc" };
 let searchHistorico = "";
+let ordemHistorico = "recentes"; // recentes | antigos | nota | saldo
+let sumulaAberta = null; // evita reabrir a súmula a cada atualização dos dados
 
-export function renderHistorico(root, state){
+// Qualquer mudança de endereço libera a súmula para abrir de novo.
+window.addEventListener("hashchange", () => { sumulaAberta = null; });
+
+const RES_INFO = {
+  vitoria: { letra: "V", cls: "res-v", nome: "Vitória" },
+  empate: { letra: "E", cls: "res-e", nome: "Empate" },
+  derrota: { letra: "D", cls: "res-d", nome: "Derrota" },
+};
+
+function plural(n, um, varios){ return `${n} ${n === 1 ? um : varios}`; }
+
+export function renderHistorico(root, state, subId){
   const filtro = getFiltroPeriodo();
   const todosRealizados = [...jogosRealizados(state.jogos)].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   const anos = anosDisponiveis(todosRealizados);
@@ -27,39 +28,89 @@ export function renderHistorico(root, state){
 
   const nomeAdv = id => state.adversarios.find(a => a.id === id)?.nome || "?";
   const nomeCampo = id => state.campos.find(c => c.id === id)?.nome || "?";
+  const nomeAtleta = id => id === GOL_CONTRA_ID ? "gol contra" : (state.atletas.find(a => a.id === id)?.nome || "?");
 
   const termo = searchHistorico.toLowerCase();
   const realizados = termo
     ? doPeriodo.filter(j => nomeAdv(j.adversarioId).toLowerCase().includes(termo) || nomeCampo(j.campoId).toLowerCase().includes(termo))
     : doPeriodo;
 
-  const sortFns = {
-    data: j => j.data || "",
-    adversario: j => nomeAdv(j.adversarioId).toLowerCase(),
-    campo: j => nomeCampo(j.campoId).toLowerCase(),
-    placar: j => (j.placarNos ?? 0) - (j.placarAdversario ?? 0),
-    resultado: j => { const r = resultadoJogo(j); return r ? RESULTADO_ORDEM[r] : -1; },
-  };
-  const listaOrdenada = sortRows(realizados, sortState, sortFns);
+  const nota = j => mediaNotaJogadoresNoJogo(j).media;
+  const saldo = j => (j.placarNos ?? 0) - (j.placarAdversario ?? 0);
+  let lista = [...realizados];
+  if (ordemHistorico === "antigos") lista.sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+  else if (ordemHistorico === "nota") lista.sort((a, b) => (nota(b) ?? -1) - (nota(a) ?? -1));
+  else if (ordemHistorico === "saldo") lista.sort((a, b) => saldo(b) - saldo(a));
+  const porData = ordemHistorico === "recentes" || ordemHistorico === "antigos";
 
-  const rows = listaOrdenada.map(j => {
+  // ---- Manchete do período ----
+  const cont = { vitoria: 0, empate: 0, derrota: 0 };
+  let gp = 0, gc = 0;
+  realizados.forEach(j => { const r = resultadoJogo(j); if (r) cont[r]++; gp += j.placarNos || 0; gc += j.placarAdversario || 0; });
+  const goleada = [...realizados].filter(j => saldo(j) > 0).sort((a, b) => saldo(b) - saldo(a) || (b.data || "").localeCompare(a.data || ""))[0];
+  const melhorNota = [...realizados].filter(j => nota(j) !== null).sort((a, b) => nota(b) - nota(a))[0];
+  const periodoTxt = [filtro.mes ? MESES[Number(filtro.mes) - 1] : "", filtro.ano || ""].filter(Boolean).join(" de ") || "Toda a história";
+  const manchete = realizados.length ? `
+    <div class="manchete">
+      <div class="manchete-eyebrow">${escapeHtml(periodoTxt)}</div>
+      <div class="manchete-titulo">${plural(realizados.length, "partida", "partidas")}: ${plural(cont.vitoria, "vitória", "vitórias")}, ${plural(cont.empate, "empate", "empates")} e ${plural(cont.derrota, "derrota", "derrotas")}</div>
+      <div class="manchete-sub">${plural(gp, "gol marcado", "gols marcados")} e ${gc} sofrido${gc === 1 ? "" : "s"}${goleada ? ` · maior vitória: ${goleada.placarNos} x ${goleada.placarAdversario} contra ${escapeHtml(nomeAdv(goleada.adversarioId))}` : ""}${melhorNota ? ` · melhor atuação coletiva: nota ${fmt1(nota(melhorNota))} contra ${escapeHtml(nomeAdv(melhorNota.adversarioId))}` : ""}</div>
+    </div>` : "";
+
+  // ---- Cartões ----
+  const cartao = (j) => {
     const r = resultadoJogo(j);
+    const info = RES_INFO[r];
+    const gols = {};
+    (j.golsAssistencias || []).forEach(e => { if (e.atletaGolId) gols[e.atletaGolId] = (gols[e.atletaGolId] || 0) + 1; });
+    const golsTxt = Object.entries(gols).map(([id, n]) => `${nomeAtleta(id)}${n > 1 ? ` ${n}` : ""}`).join(", ");
+    const n = nota(j);
     return `
-      <tr class="clickable" data-id="${j.id}">
-        <td>${formatDate(j.data)}</td>
-        <td><strong>${escapeHtml(nomeAdv(j.adversarioId))}</strong></td>
-        <td>${escapeHtml(nomeCampo(j.campoId))}</td>
-        <td class="pill-num">${j.placarNos ?? "–"} x ${j.placarAdversario ?? "–"}</td>
-        <td>${r ? RESULTADO_BADGE[r] : "—"}</td>
-      </tr>`;
-  }).join("");
+      <div class="hist-card" data-id="${j.id}">
+        <div class="hist-res ${info ? info.cls : ""}" title="${info ? info.nome : ""}">${info ? info.letra : "—"}</div>
+        <div class="hist-info">
+          <div class="hist-adv">${escapeHtml(nomeAdv(j.adversarioId))}</div>
+          <div class="hist-meta">${formatDate(j.data)} · ${escapeHtml(nomeCampo(j.campoId))}</div>
+          ${golsTxt ? `<div class="hist-gols">⚽ ${escapeHtml(golsTxt)}</div>` : ""}
+        </div>
+        <div class="hist-placar">
+          <div class="hist-placar-val">${j.placarNos ?? "–"} x ${j.placarAdversario ?? "–"}</div>
+          ${n !== null ? `<div class="hist-nota">nota ${fmt1(n)}</div>` : ""}
+        </div>
+      </div>`;
+  };
+
+  let corpo = "";
+  if (!lista.length){
+    corpo = `<div class="empty-state"><h3>Nenhuma partida</h3><p>${termo ? `Nada encontrado para "${escapeHtml(searchHistorico)}".` : "Nenhuma partida realizada para o período selecionado."}</p></div>`;
+  } else if (porData){
+    const grupos = [];
+    lista.forEach(j => {
+      const chave = (j.data || "").slice(0, 7);
+      let g = grupos[grupos.length - 1];
+      if (!g || g.chave !== chave){ g = { chave, jogos: [] }; grupos.push(g); }
+      g.jogos.push(j);
+    });
+    corpo = grupos.map(g => {
+      const c = { vitoria: 0, empate: 0, derrota: 0 };
+      g.jogos.forEach(j => { const r = resultadoJogo(j); if (r) c[r]++; });
+      const [a, m] = g.chave.split("-").map(Number);
+      return `
+        <div class="hist-mes">${MESES[m - 1]} de ${a} <span>${plural(g.jogos.length, "jogo", "jogos")} · ${c.vitoria}V ${c.empate}E ${c.derrota}D</span></div>
+        ${g.jogos.map(cartao).join("")}`;
+    }).join("");
+  } else {
+    corpo = lista.map(cartao).join("");
+  }
 
   root.innerHTML = `
     <div class="topbar">
       <div><div class="eyebrow">Visão geral</div><h1>Histórico</h1></div>
     </div>
 
-    <div class="form-grid" style="margin-bottom:20px; max-width:680px;">
+    ${manchete}
+
+    <div class="rank-filtros">
       <div class="field">
         <label>Ano</label>
         <select id="filtro-ano">
@@ -78,41 +129,45 @@ export function renderHistorico(root, state){
         </select>
       </div>
       <div class="field">
+        <label>Ordenar por</label>
+        <select id="ordem-hist">
+          <option value="recentes" ${ordemHistorico === "recentes" ? "selected" : ""}>Mais recentes</option>
+          <option value="antigos" ${ordemHistorico === "antigos" ? "selected" : ""}>Mais antigos</option>
+          <option value="nota" ${ordemHistorico === "nota" ? "selected" : ""}>Melhor nota da partida</option>
+          <option value="saldo" ${ordemHistorico === "saldo" ? "selected" : ""}>Maior saldo de gols</option>
+        </select>
+      </div>
+      <div class="field">
         <label>Buscar por adversário/campo</label>
         <input type="text" id="input-busca" placeholder="Digite pra filtrar…" value="${escapeHtml(searchHistorico)}">
       </div>
     </div>
 
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          ${sortableTh("Data", "data", sortState)}
-          ${sortableTh("Adversário", "adversario", sortState)}
-          ${sortableTh("Campo", "campo", sortState)}
-          ${sortableTh("Placar", "placar", sortState)}
-          ${sortableTh("Resultado", "resultado", sortState)}
-        </tr></thead>
-        <tbody>${rows || `<tr class="empty-row"><td colspan="5">${termo ? `Nenhuma partida encontrada para "${escapeHtml(searchHistorico)}".` : "Nenhuma partida realizada para o período selecionado."}</td></tr>`}</tbody>
-      </table>
-    </div>
+    ${corpo}
   `;
-
-  wireSortableHeaders(root, sortState, () => renderHistorico(root, state));
 
   $("#input-busca", root)?.addEventListener("input", (e) => {
     searchHistorico = e.target.value;
     reRenderKeepingFocus(root, () => renderHistorico(root, state));
   });
+  $("#ordem-hist", root)?.addEventListener("change", (e) => { ordemHistorico = e.target.value; renderHistorico(root, state); });
 
-  $$("tbody tr[data-id]", root).forEach(tr => {
-    tr.addEventListener("click", () => {
-      const jogo = listaOrdenada.find(j => j.id === tr.dataset.id);
-      openSumulaModal(jogo, state);
+  $$(".hist-card[data-id]", root).forEach(el => {
+    el.addEventListener("click", () => {
+      const jogo = state.jogos.find(j => j.id === el.dataset.id);
+      if (jogo) openSumulaModal(jogo, state);
     });
   });
 
   $("#filtro-ano", root)?.addEventListener("change", (e) => { setFiltroPeriodo({ ano: e.target.value }); reRenderKeepingFocus(root, () => renderHistorico(root, state)); });
   $("#filtro-mes", root)?.addEventListener("change", (e) => { setFiltroPeriodo({ mes: e.target.value }); reRenderKeepingFocus(root, () => renderHistorico(root, state)); });
+
+  // Link direto para a súmula: #historico/<id do jogo>
+  if (subId && sumulaAberta !== subId){
+    const jogo = state.jogos.find(j => j.id === subId && j.status === "realizado");
+    sumulaAberta = subId;
+    if (jogo) openSumulaModal(jogo, state);
+  }
 }
 
 // Ordena entradas de escalação por posição (GOL, ZAG, LAT, VOL, MEI, ATA) —

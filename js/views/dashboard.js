@@ -281,7 +281,11 @@ export function renderDashboard(root, state){
     });
   }
 
-  $$("[data-goto]", root).forEach(el => el.addEventListener("click", () => { location.hash = `#jogos/${el.dataset.goto}`; }));
+  $$("[data-goto]", root).forEach(el => el.addEventListener("click", () => {
+    const j = state.jogos.find(x => x.id === el.dataset.goto);
+    // Jogo realizado abre a súmula (pública); agendado abre a página do jogo.
+    location.hash = j && j.status === "realizado" ? `#historico/${j.id}` : `#jogos/${el.dataset.goto}`;
+  }));
 
   $("#filtro-ano", root)?.addEventListener("change", (e) => { setFiltroPeriodo({ ano: e.target.value }); reRenderKeepingFocus(root, () => renderDashboard(root, state)); });
   $("#filtro-mes", root)?.addEventListener("change", (e) => { setFiltroPeriodo({ mes: e.target.value }); reRenderKeepingFocus(root, () => renderDashboard(root, state)); });
