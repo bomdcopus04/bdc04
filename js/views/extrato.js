@@ -154,7 +154,8 @@ function extratoHtml(atleta, state, ano){
   if (jogos.length >= 3 && semEle.length >= 3){
     const apCom = Math.round(ptsCom / (jogos.length * 3) * 100);
     const apSem = Math.round(semEle.reduce((t, j) => t + pontos(resultadoJogo(j)), 0) / (semEle.length * 3) * 100);
-    frases.push(`com ele o time tem ${apCom}% de aproveitamento (sem ele, ${apSem}%)`);
+    // Só mostra quando é favorável: a ficha é pública e não deve virar cobrança.
+    if (apCom >= apSem) frases.push(`com ele o time tem ${apCom}% de aproveitamento (sem ele, ${apSem}%)`);
   }
 
   const kpis = [
