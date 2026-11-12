@@ -332,6 +332,10 @@ export function renderCadastrosHub(root, state){
       route: "campos", label: "Campos", desc: `${state.campos.length} cadastrado${state.campos.length === 1 ? "" : "s"}${campoSem ? ` · ${campoSem} sem jogos` : ""}`,
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="1"/><circle cx="12" cy="12" r="2.4"/><path d="M12 6v12M3 9h3v6H3M18 9h3v6h-3"/></svg>`,
     },
+    {
+      route: "backup", label: "Backup", desc: "Baixar uma cópia de todos os dados",
+      icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>`,
+    },
   ];
 
   root.innerHTML = `

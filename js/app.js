@@ -15,6 +15,7 @@ import { renderExtrato } from "./views/extrato.js";
 import { renderPresenca } from "./views/presenca.js";
 import { renderRetrospecto } from "./views/retrospecto.js";
 import { renderPremiacoes } from "./views/premiacoes.js";
+import { renderBackup } from "./views/backup.js";
 
 const state = {
   adversarios: [], campos: [], atletas: [], jogos: [], financeiro: [], configFinanceiro: null,
@@ -53,9 +54,10 @@ const ROUTES = {
   relatorios: renderRelatoriosHub,
   retrospecto: renderRetrospecto,
   premiacoes: renderPremiacoes,
+  backup: renderBackup,
 };
 
-const PROTECTED_ROUTES = new Set(["jogos", "atletas", "adversarios", "campos", "avaliacao", "cadastros", "financeiro"]);
+const PROTECTED_ROUTES = new Set(["jogos", "atletas", "adversarios", "campos", "avaliacao", "cadastros", "financeiro", "backup"]);
 
 // ----------------------------------------------------------------------------
 // Cache local (localStorage) — mostra a última versão conhecida dos dados na
