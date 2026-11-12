@@ -1,5 +1,5 @@
-import { $, $$, escapeHtml, fmt1, toast } from "../utils.js";
-import { ehJogador, jogosRealizados, statsPorAtleta, notasDoAtletaNoJogo } from "../stats.js";
+import { $, $$, escapeHtml, fmt1, toast, avg } from "../utils.js";
+import { ehJogador, jogosRealizados, statsPorAtleta, notasDoAtletaNoJogo, resultadoJogo } from "../stats.js";
 import { anosDisponiveis, MESES } from "../filters.js";
 import { openImagemModal, iniciais } from "./flyer.js";
 
@@ -25,11 +25,26 @@ function nomesTexto(itens, limite = 2){
 // Quatro/cinco prêmios da temporada. `top` traz o pódio (até 3), `vencedores`
 // todos que empatam na liderança.
 function calcularPremios(jogadores, jogos){
-  const stats = statsPorAtleta(jogadores, jogos).filter(s => s.jogosCount > 0 || s.gols > 0 || s.assistencias > 0);
+  const base = statsPorAtleta(jogadores, jogos).filter(s => s.jogosCount > 0 || s.gols > 0 || s.assistencias > 0);
+  const asc = [...jogos].sort((a, b) => (a.data || "").localeCompare(b.data || ""));
   const comNota = (id) => jogos.filter(j => notasDoAtletaNoJogo(j, id).length > 0).length;
   const jogosAvaliados = jogos.filter(j => Object.keys(j.avaliacoesJogadores || {}).some(id => notasDoAtletaNoJogo(j, id).length > 0)).length;
   const minNota = Math.min(5, Math.max(1, Math.ceil(jogosAvaliados * 0.4)));
   const porNome = (a, b) => (a.atleta.nome || "").localeCompare(b.atleta.nome || "", "pt-BR");
+
+  // Extras: gols em jogos vencidos (Decisivo) e evolução das notas (Revelação).
+  const stats = base.map(s => {
+    const id = s.atleta.id;
+    let golsVit = 0;
+    asc.forEach(j => { if (resultadoJogo(j) === "vitoria") (j.golsAssistencias || []).forEach(e => { if (e.atletaGolId === id) golsVit++; }); });
+    const notas = asc.map(j => avg(notasDoAtletaNoJogo(j, id))).filter(n => n !== null);
+    let delta = null;
+    if (notas.length >= 4){
+      const meio = Math.floor(notas.length / 2);
+      delta = avg(notas.slice(meio)) - avg(notas.slice(0, meio));
+    }
+    return { ...s, golsVit, delta };
+  });
 
   const defs = [
     { key: "artilheiro", emoji: "⚽", label: "Artilheiro", metric: s => s.gols, filtro: s => s.gols > 0, desempate: (a, b) => b.assistencias - a.assistencias, fmt: s => `${s.gols} gol${s.gols > 1 ? "s" : ""}`, unidade: "gols" },
@@ -37,12 +52,20 @@ function calcularPremios(jogadores, jogos){
     { key: "ga", emoji: "🔥", label: "Gols + assistências", metric: s => s.gols + s.assistencias, filtro: s => s.gols + s.assistencias > 0, desempate: (a, b) => b.gols - a.gols, fmt: s => `${s.gols + s.assistencias} (${s.gols}G ${s.assistencias}A)`, unidade: "participações em gols" },
     { key: "nota", emoji: "⭐", label: "Melhor nota média", metric: s => s.media, filtro: s => s.media !== null && comNota(s.atleta.id) >= minNota, desempate: (a, b) => b.jogosCount - a.jogosCount, fmt: s => fmt1(s.media), unidade: `nota média (mín. ${minNota} jogos avaliados)` },
     { key: "assiduo", emoji: "🏃", label: "Mais assíduo", metric: s => s.jogosCount, filtro: s => s.jogosCount > 0, desempate: (a, b) => b.gols + b.assistencias - (a.gols + a.assistencias), fmt: s => `${s.jogosCount} jogo${s.jogosCount > 1 ? "s" : ""}`, unidade: "jogos" },
+    { key: "decisivo", emoji: "🎯", label: "Decisivo", metric: s => s.golsVit, filtro: s => s.golsVit > 0, desempate: (a, b) => b.assistencias - a.assistencias, fmt: s => `${s.golsVit} gol${s.golsVit > 1 ? "s" : ""} em vitórias`, unidade: "gols em jogos vencidos" },
+    { key: "revelacao", emoji: "📈", label: "Revelação", metric: s => s.delta, filtro: s => s.delta !== null && s.delta > 0.05, desempate: (a, b) => b.jogosCount - a.jogosCount, fmt: s => `+${fmt1(s.delta)} na nota`, unidade: "evolução da nota (2ª metade da temporada x 1ª)" },
   ];
   return defs.map(d => {
     const lista = stats.filter(d.filtro).sort((a, b) => d.metric(b) - d.metric(a) || d.desempate(a, b) || porNome(a, b));
     const lider = lista[0] ? d.metric(lista[0]) : null;
     return { ...d, top: lista.slice(0, 3), vencedores: lista.filter(s => d.metric(s) === lider) };
   });
+}
+
+function rankingDoMes(jogadores, realizados, mes){
+  return statsPorAtleta(jogadores, realizados.filter(j => (j.data || "").startsWith(mes)))
+    .filter(s => s.media !== null && s.jogosCount > 0)
+    .sort((a, b) => b.media - a.media || (b.gols + b.assistencias) - (a.gols + a.assistencias) || b.jogosCount - a.jogosCount);
 }
 
 function textoTemporada(premios, periodo){
@@ -60,15 +83,16 @@ function abrirImagemTemporada(premios, periodo){
     arquivo: `premiacao-bom-d-copus-${periodo.replace(/\W+/g, "-").toLowerCase()}`,
     legenda: `${textoTemporada(premios, periodo).replace(/\*/g, "")}\n\n${HASHTAGS}`,
     render: (e) => {
-      const pad = e.H > 1500 ? 34 : 18;
+      const pad = e.H > 1500 ? 30 : 12;
+      const fn = itens.length > 5 ? 48 : 60;
       const linhas = itens.map(p => `
         <div style="display:flex; align-items:center; gap:22px; width:100%; padding:${pad}px 0; border-bottom:2px solid ${e.A}44;">
-          <div style="font-size:60px; width:84px; text-align:center;">${p.emoji}</div>
+          <div style="font-size:${fn}px; width:84px; text-align:center;">${p.emoji}</div>
           <div style="flex:1; min-width:0;">
             <div style="font-size:24px; letter-spacing:.18em; color:${e.A};">${escapeHtml(p.label.toUpperCase())}</div>
-            <div style="font-family:'Bebas Neue',sans-serif; font-size:60px; line-height:1.05;">${escapeHtml(nomesTexto(p.vencedores).toUpperCase())}</div>
+            <div style="font-family:'Bebas Neue',sans-serif; font-size:${fn}px; line-height:1.05;">${escapeHtml(nomesTexto(p.vencedores).toUpperCase())}</div>
           </div>
-          <div style="font-family:'Bebas Neue',sans-serif; font-size:50px; color:${e.A}; white-space:nowrap;">${escapeHtml(p.fmt(p.vencedores[0]))}</div>
+          <div style="font-family:'Bebas Neue',sans-serif; font-size:${fn - 10}px; color:${e.A}; white-space:nowrap;">${escapeHtml(p.fmt(p.vencedores[0]))}</div>
         </div>`).join("");
       return `<div style="${e.base}">${e.cantos}${e.topo}
         <div style="text-align:center;">
@@ -136,57 +160,108 @@ export function renderPremiacoes(root, state){
     const jogos = anoSel === "all" ? realizados : realizados.filter(j => (j.data || "").startsWith(anoSel));
     periodo = anoSel === "all" ? "de todas as temporadas" : `da temporada ${anoSel}`;
     const premios = calcularPremios(jogadores, jogos);
-    const cards = premios.map(p => `
-      <div class="card card-pad">
-        <div class="card-title">${p.emoji} ${escapeHtml(p.label)}</div>
-        <div class="card-sub">${escapeHtml(p.unidade)}</div>
-        ${p.top.length ? p.top.map((s, i) => `
-          <div style="display:flex; justify-content:space-between; gap:10px; padding:6px 0; ${i ? "" : "font-weight:700;"}">
-            <span>${["🥇", "🥈", "🥉"][i]} ${escapeHtml(s.atleta.nome)}</span>
-            <span style="font-family:var(--font-mono);">${escapeHtml(p.fmt(s))}</span>
-          </div>`).join("") : `<p style="color:var(--ink-faint); font-size:13px; margin:0;">Sem dados suficientes.</p>`}
-      </div>`).join("");
+    const entregues = premios.filter(p => p.vencedores.length);
+
+    // Quem levou mais troféus (manchete).
+    const trofeus = new Map();
+    entregues.forEach(p => p.vencedores.forEach(v => trofeus.set(v.atleta.id, { atleta: v.atleta, n: (trofeus.get(v.atleta.id)?.n || 0) + 1 })));
+    const rank = [...trofeus.values()].sort((a, b) => b.n - a.n);
+    const topN = rank.length ? rank[0].n : 0;
+    const campeoes = rank.filter(r => r.n === topN);
+    const manchete = entregues.length ? `
+      <div class="manchete">
+        <div class="manchete-eyebrow">Premiação ${anoSel === "all" ? "de todas as temporadas" : `da temporada ${anoSel}`}</div>
+        <div class="manchete-titulo">${topN > 1 ? `${escapeHtml(nomesTexto(campeoes.map(c => ({ atleta: c.atleta })), 2))} ${campeoes.length > 1 ? "lideram" : "lidera"} com ${topN} troféus` : `${entregues.length} prêmios entregues, cada um com um dono diferente`}</div>
+        <div class="manchete-sub">${entregues.length} prêmios em ${jogos.length} jogo${jogos.length === 1 ? "" : "s"} · quem vai levar a taça no fim do ano?</div>
+      </div>` : "";
+
+    const cards = premios.map(p => {
+      if (!p.vencedores.length) return `
+        <div class="tro-card tro-vazio">
+          <div class="tro-top"><span class="tro-emoji">${p.emoji}</span><span class="tro-label">${escapeHtml(p.label)}</span></div>
+          <div class="tro-outros">Sem dados suficientes ainda.</div>
+        </div>`;
+      const outros = p.top.slice(1).map((s, i) => `${i + 2}º ${escapeHtml(s.atleta.nome)} ${escapeHtml(p.fmt(s))}`).join(" · ");
+      return `
+        <div class="tro-card">
+          <div class="tro-top"><span class="tro-emoji">${p.emoji}</span><span class="tro-label">${escapeHtml(p.label)}</span></div>
+          <div class="tro-nome">${escapeHtml(nomesTexto(p.vencedores, 2))}</div>
+          <div class="tro-val">${escapeHtml(p.fmt(p.vencedores[0]))}</div>
+          ${outros ? `<div class="tro-outros">${outros}</div>` : ""}
+        </div>`;
+    }).join("");
     corpo = `
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
-        <button class="btn btn-primary btn-sm" id="pm-imagem" ${premios.some(p => p.vencedores.length) ? "" : "disabled"}>Gerar imagem da premiação</button>
-        <button class="btn btn-ghost btn-sm" id="pm-copiar" ${premios.some(p => p.vencedores.length) ? "" : "disabled"}>Copiar texto</button>
+      ${manchete}
+      <div class="rank-filtros" style="max-width:520px;">
+        <div class="field">
+          <label>Temporada</label>
+          <select id="pm-ano">
+            ${anos.map(a => `<option value="${a}" ${a === anoSel ? "selected" : ""}>${a}</option>`).join("")}
+            <option value="all" ${anoSel === "all" ? "selected" : ""}>Todas</option>
+          </select>
+        </div>
       </div>
-      <div class="dashboard-grid-3">${cards}</div>`;
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+        <button class="btn btn-primary btn-sm" id="pm-imagem" ${entregues.length ? "" : "disabled"}>Gerar imagem da premiação</button>
+        <button class="btn btn-ghost btn-sm" id="pm-copiar" ${entregues.length ? "" : "disabled"}>Copiar texto</button>
+      </div>
+      <div class="tro-grid">${cards}</div>`;
     root.__premios = premios;
   } else {
-    const jogosMes = mesSel ? realizados.filter(j => (j.data || "").startsWith(mesSel)) : [];
-    const ranking = statsPorAtleta(jogadores, jogosMes)
-      .filter(s => s.media !== null && s.jogosCount > 0)
-      .sort((a, b) => b.media - a.media || (b.gols + b.assistencias) - (a.gols + a.assistencias) || b.jogosCount - a.jogosCount);
+    const ranking = mesSel ? rankingDoMes(jogadores, realizados, mesSel) : [];
     root.__ranking = ranking;
-    const linhas = ranking.slice(0, 8).map((s, i) => `
-      <tr>
-        <td class="pill-num">${i + 1}º</td>
-        <td><strong>${escapeHtml(s.atleta.nome)}</strong></td>
-        <td class="pill-num">${fmt1(s.media)}</td>
-        <td class="pill-num">${s.jogosCount}</td>
-        <td class="pill-num">${s.gols}</td>
-        <td class="pill-num">${s.assistencias}</td>
-      </tr>`).join("");
+    const top3 = ranking.slice(0, 3);
+    const pod = (s, i) => `
+      <div class="rank-pod p${i + 1}" data-atleta="${s.atleta.id}" title="Ver extrato">
+        <div class="rank-pod-pos">${i + 1}º</div>
+        <div class="rank-pod-name">${escapeHtml(s.atleta.nome)}</div>
+        <div class="rank-pod-val">${fmt1(s.media)}</div>
+        <div class="rank-pod-unit">nota média</div>
+        <div class="rank-pod-sub">${s.jogosCount} jogo${s.jogosCount === 1 ? "" : "s"} · ${s.gols}G ${s.assistencias}A</div>
+      </div>`;
+    const resto = ranking.slice(3, 8).map((s, i) => `
+      <tr><td class="pill-num">${i + 4}º</td><td><strong>${escapeHtml(s.atleta.nome)}</strong></td><td class="pill-num">${fmt1(s.media)}</td><td class="pill-num">${s.jogosCount}</td><td class="pill-num">${s.gols}</td><td class="pill-num">${s.assistencias}</td></tr>`).join("");
+
+    // Linha do tempo: destaque de cada mês.
+    const historico = meses.map(m => ({ mes: m, rk: rankingDoMes(jogadores, realizados, m) })).filter(x => x.rk.length);
+    root.__historico = historico;
+
     corpo = `
-      <div class="form-grid" style="max-width:420px; margin-bottom:14px;">
+      ${ranking.length ? `
+      <div class="manchete">
+        <div class="manchete-eyebrow">Destaque de ${escapeHtml(mesLabel(mesSel))}</div>
+        <div class="manchete-titulo">${escapeHtml(ranking[0].atleta.nome)} — nota média ${fmt1(ranking[0].media)}</div>
+        <div class="manchete-sub">${ranking[0].jogosCount} jogo${ranking[0].jogosCount === 1 ? "" : "s"} no mês, ${ranking[0].gols} gol${ranking[0].gols === 1 ? "" : "s"} e ${ranking[0].assistencias} assistência${ranking[0].assistencias === 1 ? "" : "s"}${ranking[1] ? ` · logo atrás: ${escapeHtml(ranking[1].atleta.nome)} (${fmt1(ranking[1].media)})` : ""}</div>
+      </div>` : ""}
+      <div class="rank-filtros" style="max-width:520px;">
         <div class="field">
           <label>Mês</label>
           <select id="pm-mes">${meses.map(m => `<option value="${m}" ${m === mesSel ? "selected" : ""}>${mesLabel(m)}</option>`).join("")}</select>
         </div>
       </div>
       ${ranking.length ? `
-        <div class="card card-pad" style="margin-bottom:14px;">
-          <div class="card-sub" style="margin-bottom:2px;">🏆 Destaque de ${escapeHtml(mesSel ? mesLabel(mesSel) : "")}</div>
-          <div style="font-family:'Bebas Neue',sans-serif; font-size:34px; letter-spacing:.03em;">${escapeHtml(ranking[0].atleta.nome)} — nota média ${fmt1(ranking[0].media)}</div>
-        </div>
-        <div style="margin-bottom:14px;"><button class="btn btn-primary btn-sm" id="pm-destaque">Gerar imagem do destaque</button></div>
-        <div class="table-wrap"><table>
+        <div style="margin-bottom:16px;"><button class="btn btn-primary btn-sm" id="pm-destaque">Gerar imagem do destaque</button></div>
+        <div class="rank-podium">${[1, 0, 2].filter(i => top3[i]).map(i => pod(top3[i], i)).join("")}</div>
+        ${resto ? `<div class="table-wrap"><table>
           <thead><tr><th>#</th><th>Atleta</th><th>Nota média</th><th>Jogos</th><th>Gols</th><th>Assist.</th></tr></thead>
-          <tbody>${linhas}</tbody>
-        </table></div>
+          <tbody>${resto}</tbody></table></div>` : ""}
         <p class="field-hint" style="margin-top:8px;">Ranking pela nota média no mês, só com jogadores escalados e avaliados. Desempate por gols + assistências e depois por jogos.</p>`
-      : `<div class="empty-state"><h3>Sem notas nesse mês</h3><p>O destaque do mês usa as avaliações dos jogadores. Escolha outro mês ou lance as notas das partidas.</p></div>`}`;
+      : `<div class="empty-state"><h3>Sem notas nesse mês</h3><p>O destaque do mês usa as avaliações dos jogadores. Escolha outro mês ou lance as notas das partidas.</p></div>`}
+
+      ${historico.length ? `
+        <div class="dash-section-title" style="margin-top:26px;">Destaques mês a mês</div>
+        ${historico.map(h => `
+          <div class="hist-card" style="cursor:default;">
+            <div class="hist-res res-e" style="font-size:12px;">${escapeHtml(MESES[Number(h.mes.slice(5)) - 1].slice(0, 3).toUpperCase())}</div>
+            <div class="hist-info">
+              <div class="hist-adv">${escapeHtml(h.rk[0].atleta.nome)}</div>
+              <div class="hist-meta">${escapeHtml(mesLabel(h.mes))} · ${h.rk[0].jogosCount} jogo${h.rk[0].jogosCount === 1 ? "" : "s"} · ${h.rk[0].gols}G ${h.rk[0].assistencias}A</div>
+            </div>
+            <div class="hist-placar">
+              <div class="hist-placar-val">${fmt1(h.rk[0].media)}</div>
+              <button class="btn btn-ghost btn-sm" data-img-mes="${h.mes}" type="button" style="margin-top:4px;">Imagem</button>
+            </div>
+          </div>`).join("")}` : ""}`;
   }
 
   root.innerHTML = `
@@ -196,24 +271,15 @@ export function renderPremiacoes(root, state){
         <h1>Premiações</h1>
       </div>
     </div>
-    <div class="tabbar">
-      <button class="tab-btn ${aba === "temporada" ? "active" : ""}" data-aba="temporada">Premiação da temporada</button>
-      <button class="tab-btn ${aba === "mes" ? "active" : ""}" data-aba="mes">Destaque do mês</button>
+    <div class="rank-chips">
+      <button class="rank-chip ${aba === "temporada" ? "active" : ""}" data-aba="temporada" type="button">Premiação da temporada</button>
+      <button class="rank-chip ${aba === "mes" ? "active" : ""}" data-aba="mes" type="button">Destaque do mês</button>
     </div>
-    ${aba === "temporada" ? `
-      <div class="form-grid" style="max-width:420px; margin-bottom:14px;">
-        <div class="field">
-          <label>Temporada</label>
-          <select id="pm-ano">
-            ${anos.map(a => `<option value="${a}" ${a === anoSel ? "selected" : ""}>${a}</option>`).join("")}
-            <option value="all" ${anoSel === "all" ? "selected" : ""}>Todas</option>
-          </select>
-        </div>
-      </div>` : ""}
     ${corpo}
   `;
 
-  $$(".tab-btn[data-aba]", root).forEach(b => b.addEventListener("click", () => { aba = b.dataset.aba; renderPremiacoes(root, state); }));
+  $$(".rank-chip[data-aba]", root).forEach(b => b.addEventListener("click", () => { aba = b.dataset.aba; renderPremiacoes(root, state); }));
+  $$(".rank-pod", root).forEach(el => el.addEventListener("click", () => { location.hash = `#extrato/${el.dataset.atleta}`; }));
   $("#pm-ano", root)?.addEventListener("change", (e) => { anoSel = e.target.value; renderPremiacoes(root, state); });
   $("#pm-mes", root)?.addEventListener("change", (e) => { mesSel = e.target.value; renderPremiacoes(root, state); });
   $("#pm-imagem", root)?.addEventListener("click", () => abrirImagemTemporada(root.__premios, periodo.replace("da temporada ", "temporada ").replace("de todas as temporadas", "todas as temporadas")));
@@ -222,4 +288,8 @@ export function renderPremiacoes(root, state){
     catch(err){ toast("Não foi possível copiar automaticamente.", "err"); }
   });
   $("#pm-destaque", root)?.addEventListener("click", () => abrirImagemDestaque(root.__ranking, mesSel));
+  $$("[data-img-mes]", root).forEach(b => b.addEventListener("click", () => {
+    const h = root.__historico.find(x => x.mes === b.dataset.imgMes);
+    if (h) abrirImagemDestaque(h.rk, h.mes);
+  }));
 }
