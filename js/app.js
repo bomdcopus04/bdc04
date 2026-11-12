@@ -1,6 +1,6 @@
 import { watchAuth, loginWithGoogle, logout, isEmailAllowed } from "./auth.js";
 import { listenCollection, listenDoc } from "./db.js";
-import { $, $$, toast } from "./utils.js";
+import { $, $$, toast, getTheme, toggleTheme } from "./utils.js";
 
 import { renderDashboard } from "./views/dashboard.js";
 import { renderRanking } from "./views/ranking.js";
@@ -182,6 +182,21 @@ function render(){
 }
 
 window.addEventListener("hashchange", render);
+
+// Botão de tema claro/escuro — fica no menu lateral (desktop) e na barra do
+// topo (celular), então vale para todas as páginas.
+const ICONE_SOL = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
+const ICONE_LUA = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function atualizarBotoesTema(){
+  const escuro = getTheme() === "dark";
+  const titulo = escuro ? "Ativar tema claro" : "Ativar tema escuro";
+  const side = $("#btn-theme-side");
+  if (side){ side.innerHTML = `${escuro ? ICONE_SOL : ICONE_LUA}<span>${escuro ? "Tema claro" : "Tema escuro"}</span>`; side.title = titulo; }
+  const mob = $("#btn-theme-mobile");
+  if (mob){ mob.innerHTML = escuro ? ICONE_SOL : ICONE_LUA; mob.title = titulo; }
+}
+["#btn-theme-side", "#btn-theme-mobile"].forEach(sel => $(sel)?.addEventListener("click", () => { toggleTheme(); atualizarBotoesTema(); }));
+atualizarBotoesTema();
 
 // Logo/nome do time (barra lateral e topo no celular) levam pra tela inicial do app.
 $$(".brand, .mobile-topbar-brand").forEach(el => {

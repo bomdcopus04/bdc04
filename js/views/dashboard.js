@@ -150,9 +150,6 @@ export function renderDashboard(root, state){
         <h1>Dashboard</h1>
       </div>
       <div style="display:flex; align-items:center; gap:8px;">
-        <button class="btn-icon-share" id="btn-theme-toggle" type="button" title="${themeTitle}" aria-label="${themeTitle}">
-          ${themeIcon}
-        </button>
         <div class="share-popover-wrap">
           <button class="btn-icon-share" id="btn-share" type="button" title="Compartilhar app" aria-label="Compartilhar app">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.6l6.8-3.8M8.6 13.4l6.8 3.8"/></svg>
@@ -291,10 +288,6 @@ export function renderDashboard(root, state){
   $("#filtro-ano", root)?.addEventListener("change", (e) => { setFiltroPeriodo({ ano: e.target.value }); reRenderKeepingFocus(root, () => renderDashboard(root, state)); });
   $("#filtro-mes", root)?.addEventListener("change", (e) => { setFiltroPeriodo({ mes: e.target.value }); reRenderKeepingFocus(root, () => renderDashboard(root, state)); });
 
-  $("#btn-theme-toggle", root)?.addEventListener("click", () => {
-    toggleTheme();
-    reRenderKeepingFocus(root, () => renderDashboard(root, state));
-  });
 
   $("#btn-share", root)?.addEventListener("click", (e) => {
     e.stopPropagation();
