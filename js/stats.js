@@ -271,6 +271,30 @@ export function resultadoJogo(jogo){
   return "empate";
 }
 
+// Desempate de jogo empatado no tempo normal (pênaltis ou critério de
+// festival/WO). Nas estatísticas o jogo segue como empate; isso é só um selo.
+// Retorna null se não houver desempate válido.
+export function desempateJogo(jogo){
+  if (!jogo || resultadoJogo(jogo) !== "empate") return null;
+  const num = (v) => typeof v === "number" && !isNaN(v);
+  if (jogo.decisao === "penaltis" && num(jogo.penaltisNos) && num(jogo.penaltisAdversario) && jogo.penaltisNos !== jogo.penaltisAdversario){
+    const nos = jogo.penaltisNos > jogo.penaltisAdversario;
+    return {
+      tipo: "penaltis", vencedor: nos ? "nos" : "adversario",
+      texto: `${nos ? "venceu" : "perdeu"} nos pênaltis (${jogo.penaltisNos}x${jogo.penaltisAdversario})`,
+    };
+  }
+  if (jogo.decisao === "criterio" && (jogo.criterioVencedor === "nos" || jogo.criterioVencedor === "adversario")){
+    const nos = jogo.criterioVencedor === "nos";
+    const motivo = (jogo.criterioMotivo || "").trim();
+    return {
+      tipo: "criterio", vencedor: jogo.criterioVencedor,
+      texto: `${nos ? "vitória" : "derrota"} por critério${motivo ? ` (${motivo})` : ""}`,
+    };
+  }
+  return null;
+}
+
 export function resumoGeral(jogos){
   const realizados = jogosRealizados(jogos);
   let vitorias = 0, empates = 0, derrotas = 0;

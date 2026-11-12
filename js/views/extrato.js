@@ -1,7 +1,7 @@
 import { $, escapeHtml, formatDate, fmt1, avg } from "../utils.js";
 import {
   ehJogador, jogosRealizados, normalizeEscalacao, posicaoJogadaNoJogo, statsPorAtleta,
-  notasDoAtletaNoJogo, resultadoJogo, GOL_CONTRA_ID,
+  notasDoAtletaNoJogo, resultadoJogo, desempateJogo, GOL_CONTRA_ID,
 } from "../stats.js";
 
 // Filtro de ano (módulo, pra sobreviver entre re-renders e à troca de jogador).
@@ -192,7 +192,7 @@ function extratoHtml(atleta, state, ano){
       <a href="#historico/${j.id}" class="hist-card" style="text-decoration:none; color:inherit;">
         <div class="hist-res ${info ? info.cls : ""}">${info ? info.letra : "—"}</div>
         <div class="hist-info">
-          <div class="hist-adv">vs ${escapeHtml(nomeAdv(j.adversarioId))} <span style="font-weight:400; color:var(--ink-faint);">${placar}</span></div>
+          <div class="hist-adv">vs ${escapeHtml(nomeAdv(j.adversarioId))} <span style="font-weight:400; color:var(--ink-faint);">${placar}${desempateJogo(j) ? ` · ${escapeHtml(desempateJogo(j).texto)}` : ""}</span></div>
           <div class="hist-meta">${formatDate(j.data)} · ${escapeHtml(pos)}</div>
           ${linhas.map(l => `<div class="hist-gols" style="white-space:normal;">${l}</div>`).join("")}
         </div>

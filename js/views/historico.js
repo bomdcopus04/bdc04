@@ -1,5 +1,5 @@
 import { $, $$, escapeHtml, formatDate, formatDateLong, openModal, closeModal, fmt1, avg, reRenderKeepingFocus, toast } from "../utils.js";
-import { resultadoJogo, normalizeEscalacao, notasDoAtletaNoJogo, jogosRealizados, mediaNotaJogadoresNoJogo, GOL_CONTRA_ID } from "../stats.js";
+import { resultadoJogo, desempateJogo, normalizeEscalacao, notasDoAtletaNoJogo, jogosRealizados, mediaNotaJogadoresNoJogo, GOL_CONTRA_ID } from "../stats.js";
 import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
 import { abrevPosicao } from "./escalacao-ideal.js";
 
@@ -70,7 +70,7 @@ export function renderHistorico(root, state, subId){
         <div class="hist-res ${info ? info.cls : ""}" title="${info ? info.nome : ""}">${info ? info.letra : "—"}</div>
         <div class="hist-info">
           <div class="hist-adv">${escapeHtml(nomeAdv(j.adversarioId))}</div>
-          <div class="hist-meta">${formatDate(j.data)} · ${escapeHtml(nomeCampo(j.campoId))}</div>
+          <div class="hist-meta">${formatDate(j.data)} · ${escapeHtml(nomeCampo(j.campoId))}${desempateJogo(j) ? ` · ${escapeHtml(desempateJogo(j).texto)}` : ""}</div>
           ${golsTxt ? `<div class="hist-gols">⚽ ${escapeHtml(golsTxt)}</div>` : ""}
         </div>
         <div class="hist-placar">
@@ -237,7 +237,7 @@ async function compartilharImagemSumula(jogo, adv, campo, eventos, entriesInicia
         <div style="font-family:monospace; font-size:32px; font-weight:700; color:#E4B62B;">${jogo.placarAdversario ?? "–"}</div>
       </div>
     </div>
-    <div style="font-size:11px; color:#5B6470; margin-bottom:16px;">📍 ${escapeHtml(campo?.nome || "—")}${resultadoLabel ? ` · ${resultadoLabel}` : ""}</div>
+    <div style="font-size:11px; color:#5B6470; margin-bottom:16px;">📍 ${escapeHtml(campo?.nome || "—")}${resultadoLabel ? ` · ${resultadoLabel}` : ""}${desempateJogo(jogo) ? ` · ${escapeHtml(desempateJogo(jogo).texto)}` : ""}</div>
 
     <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#8A8F98; font-weight:700; margin-bottom:8px;">Gols e assistências</div>
     ${eventosImgHtml}
@@ -360,7 +360,7 @@ function openSumulaModal(jogo, state){
         <div class="sumula-side"><div class="team">Bom D' Copus</div><div class="score">${jogo.placarNos ?? "–"}</div></div>
         <div class="sumula-mid"><div class="vs">VS</div><div class="date">${formatDateLong(jogo.data)}</div></div>
         <div class="sumula-side"><div class="team">${escapeHtml(adv?.nome || "?")}</div><div class="score">${jogo.placarAdversario ?? "–"}</div></div>
-        <div class="sumula-meta"><span>📍 ${escapeHtml(campo?.nome || "—")}</span><span>Realizado</span></div>
+        <div class="sumula-meta"><span>📍 ${escapeHtml(campo?.nome || "—")}</span>${desempateJogo(jogo) ? `<span>⚖️ ${escapeHtml(desempateJogo(jogo).texto)}</span>` : ""}<span>Realizado</span></div>
       </div>
 
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:8px;">

@@ -1,6 +1,6 @@
 import { $, $$, escapeHtml, openModal, closeModal, toast, formatDateLong, formatDate, avg, fmt1 } from "../utils.js";
 import { saveDoc } from "../db.js";
-import { notasDoAtletaNoJogo, resultadoJogo, GOL_CONTRA_ID, posicaoJogadaNoJogo, normalizeEscalacao } from "../stats.js";
+import { notasDoAtletaNoJogo, resultadoJogo, desempateJogo, GOL_CONTRA_ID, posicaoJogadaNoJogo, normalizeEscalacao } from "../stats.js";
 
 // Imagem (flyer) da partida pra compartilhar no WhatsApp: modelo "Convite"
 // (antes do jogo) e "Resultado" (depois). O escudo do adversário é enviado
@@ -126,7 +126,8 @@ function legendaTexto(modelo, { jogo, adv, campo, resumo }){
   } else {
     linhas.push("Partida Encerrada! 🏁", "");
     const res = resultadoJogo(jogo);
-    const rotulo = res === "vitoria" ? " — Vitória 🏆" : res === "derrota" ? " — Derrota" : res === "empate" ? " — Empate 🤝" : "";
+    const dsp = desempateJogo(jogo);
+    const rotulo = res === "vitoria" ? " — Vitória 🏆" : res === "derrota" ? " — Derrota" : res === "empate" ? ` — Empate 🤝${dsp ? ` (${dsp.texto})` : ""}` : "";
     if (jogo.placarNos !== null && jogo.placarNos !== undefined) dados.push(`🔢 Placar: Bom D' Copus ${jogo.placarNos} x ${jogo.placarAdversario ?? 0} ${advNome}${rotulo}`);
     if (campo) dados.push(`📍 ${campo.nome}`);
     if (jogo.tipoPartida) dados.push(`🏷️ ${jogo.tipoPartida}`);
@@ -279,6 +280,7 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jo
     </div>
     <div style="text-align:center;">
       <div style="font-family:'Bebas Neue',sans-serif; font-size:64px; line-height:1.1;">BOM D' COPUS x ${escapeHtml((adv?.nome || "Adversário").toUpperCase())}</div>
+      ${desempateJogo(jogo) ? `<div style="font-size:38px; color:${DOURADO}; margin-top:10px; font-weight:700;">${escapeHtml(desempateJogo(jogo).texto.toUpperCase())}</div>` : ""}
       <div style="font-size:32px; color:${T.muted2}; margin-top:10px;">${escapeHtml(data)}${campo ? ` · ${escapeHtml(campo.nome)}` : ""}</div>
     </div>
     ${gols ? `<div style="width:100%; text-align:left; padding:0 40px; box-sizing:border-box;">

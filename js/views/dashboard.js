@@ -1,5 +1,5 @@
 import { $, $$, escapeHtml, formatDate, fmt1, toast, getTheme, toggleTheme, reRenderKeepingFocus } from "../utils.js";
-import { resumoGeral, resultadoJogo, jogosRealizados, saldoGols, ehJogador, statsPorAtleta, notasDoAtletaNoJogo } from "../stats.js";
+import { resumoGeral, resultadoJogo, desempateJogo, jogosRealizados, saldoGols, ehJogador, statsPorAtleta, notasDoAtletaNoJogo } from "../stats.js";
 import { listenPresencas } from "../db.js";
 import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
 
@@ -28,7 +28,8 @@ let unsubPresenca = null;
 
 // "Damasco 1 x 4 BDC" (placar do adversário primeiro, como na súmula do rival).
 function tituloPlacar(j, nomeAdvTexto){
-  return `${nomeAdvTexto} ${j.placarAdversario ?? "–"} x ${j.placarNos ?? "–"} BDC`;
+  const d = desempateJogo(j);
+  return `${nomeAdvTexto} ${j.placarAdversario ?? "–"} x ${j.placarNos ?? "–"} BDC${d ? ` (${d.texto})` : ""}`;
 }
 
 function pararPresenca(){ if (unsubPresenca){ unsubPresenca(); unsubPresenca = null; } }
@@ -244,7 +245,7 @@ export function renderDashboard(root, state){
           <div class="event-row" style="cursor:pointer;" data-goto="${j.id}">
             <span style="width:22px; flex-shrink:0;" title="${escapeHtml(tituloPlacar(j, advTexto(j.adversarioId)))}">${res ? RESULTADO_BADGE[res] : "—"}</span>
             <span style="flex:1;">vs ${nomeAdv(j.adversarioId)} <span style="color:var(--ink-faint); font-size:11px;">${formatDate(j.data)}</span></span>
-            <span class="pill-num">${j.placarNos ?? "–"}x${j.placarAdversario ?? "–"}</span>
+            <span class="pill-num">${j.placarNos ?? "–"}x${j.placarAdversario ?? "–"}${desempateJogo(j) ? `<small style="display:block; font-weight:400; font-size:10px; color:var(--ink-faint);">${escapeHtml(desempateJogo(j).texto)}</small>` : ""}</span>
           </div>`;
         }).join("")}
         <div class="form-actions" style="justify-content:flex-start; border:none; padding-top:12px;">

@@ -1,7 +1,7 @@
 import { $, $$, escapeHtml, openModal, closeModal, toast, confirmAction, formatDate, formatDateLong, todayISO, fmt1, ratingWidgetHtml, wireRatingWidgets, reRenderKeepingFocus } from "../utils.js";
 import { createDoc, saveDoc, removeDoc, updateJogoField, listenPresencas, setPresenca } from "../db.js";
 import { fieldHtml, collectFormData, POSICOES } from "./cadastros.js";
-import { resultadoJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida } from "../stats.js";
+import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida } from "../stats.js";
 
 import { linkPresenca } from "./presenca.js";
 import { openFlyerModal } from "./flyer.js";
@@ -37,6 +37,11 @@ function jogoFields(state){
     { key: "tipoPartida", label: "Tipo de partida", type: "select", options: TIPOS_PARTIDA, placeholder: "Selecione" },
     { key: "placarNos", label: "Placar — Nós", type: "number", min: 0 },
     { key: "placarAdversario", label: "Placar — Adversário", type: "number", min: 0 },
+    { key: "decisao", label: "Decisão (se empatou)", type: "select", options: [{ value: "", label: "Tempo normal" }, { value: "penaltis", label: "Pênaltis" }, { value: "criterio", label: "Critério (festival / W.O.)" }] },
+    { key: "penaltisNos", label: "Pênaltis — Nós", type: "number", min: 0 },
+    { key: "penaltisAdversario", label: "Pênaltis — Adversário", type: "number", min: 0 },
+    { key: "criterioVencedor", label: "Vitória por critério para", type: "select", options: [{ value: "nos", label: "Bom D' Copus" }, { value: "adversario", label: "Adversário" }] },
+    { key: "criterioMotivo", label: "Motivo do critério", type: "text", placeholder: "Ex.: vitória do visitante" },
     { key: "observacoes", label: "Observações", type: "textarea", span2: true },
   ];
 }
@@ -70,9 +75,32 @@ function openJogoForm(state, item, onSaved, prefill){
 
   $$("[data-close]").forEach(b => b.addEventListener("click", closeModal));
 
+  // Campos de desempate só aparecem conforme a "Decisão" escolhida.
+  const formEl = $("#jogo-form");
+  const campoDe = (nome) => formEl.elements[nome]?.closest(".field");
+  const atualizarDecisao = () => {
+    const d = formEl.elements["decisao"].value;
+    ["penaltisNos", "penaltisAdversario"].forEach(n => { const c = campoDe(n); if (c) c.style.display = d === "penaltis" ? "" : "none"; });
+    ["criterioVencedor", "criterioMotivo"].forEach(n => { const c = campoDe(n); if (c) c.style.display = d === "criterio" ? "" : "none"; });
+  };
+  formEl.elements["decisao"].addEventListener("change", atualizarDecisao);
+  atualizarDecisao();
+
   $("#jogo-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = collectFormData(fields, e.target);
+    if (data.decisao){
+      if (data.placarNos === null || data.placarAdversario === null || data.placarNos !== data.placarAdversario){
+        toast("O desempate só vale quando o placar do tempo normal está empatado.", "err");
+        return;
+      }
+      if (data.decisao === "penaltis" && (data.penaltisNos === null || data.penaltisAdversario === null || data.penaltisNos === data.penaltisAdversario)){
+        toast("Informe o placar dos pênaltis (sem empate).", "err");
+        return;
+      }
+    }
+    if (data.decisao !== "penaltis"){ data.penaltisNos = null; data.penaltisAdversario = null; }
+    if (data.decisao !== "criterio"){ data.criterioVencedor = ""; data.criterioMotivo = ""; }
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true;
     try{
@@ -131,7 +159,7 @@ export function renderJogosList(root, state){
 
   const rows = jogos.map(j => {
     const placar = j.status === "realizado" && j.placarNos !== null && j.placarNos !== undefined
-      ? `<span class="pill-num">${j.placarNos} x ${j.placarAdversario ?? 0}</span>` : "—";
+      ? `<span class="pill-num">${j.placarNos} x ${j.placarAdversario ?? 0}</span>${desempateJogo(j) ? ` <small style="color:var(--ink-faint);">${escapeHtml(desempateJogo(j).texto)}</small>` : ""}` : "—";
     const statusBadge = j.status === "realizado"
       ? `<span class="badge badge-ok">Realizado</span>`
       : `<span class="badge badge-pending">Agendado</span>`;
@@ -232,6 +260,7 @@ export function renderJogoDetail(root, state, jogoId){
       <div class="sumula-meta">
         <span>📍 ${escapeHtml(campo?.nome || "Campo não definido")}</span>
         ${jogo.tipoPartida ? `<span>🏷️ ${escapeHtml(jogo.tipoPartida)}</span>` : ""}
+        ${desempateJogo(jogo) ? `<span>⚖️ ${escapeHtml(desempateJogo(jogo).texto)}</span>` : ""}
         <span>${jogo.status === "realizado" ? (resultado ? { vitoria: "🏆 Vitória", empate: "➖ Empate", derrota: "❌ Derrota" }[resultado] : "Realizado") : "🗓️ Agendado"}</span>
       </div>
     </div>
