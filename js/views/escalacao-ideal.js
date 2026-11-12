@@ -1,5 +1,6 @@
 import { $, $$, escapeHtml, fmt1, toast, reRenderKeepingFocus, formatDate } from "../utils.js";
 import { listenPresencas } from "../db.js";
+import { openImagemModal } from "./flyer.js";
 import { mediaNotaAtleta, notasPorPosicao, jogosRealizados, ehJogador } from "../stats.js";
 import { filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
 
@@ -169,6 +170,91 @@ async function compartilharImagemEscalacao(linhasHtml, formacao){
     toast("Erro ao gerar a imagem: " + err.message, "err");
   }
 }
+
+
+// ---------------------------------------------------------------------------
+// Imagem para compartilhar: 3 modelos (Campo, Lista e Cartões), todos com
+// os suplentes (quem ficou fora do time titular).
+// ---------------------------------------------------------------------------
+function abrirImagemEscalacao({ formacao, titulo, periodo, linhas, suplentes }){
+  const chipSup = (x, e, tam) => `<span style="display:inline-block; font-size:${tam}px; padding:6px 16px; border:2px solid ${e.A}88; border-radius:999px; margin:5px;">${x.numero != null ? `<strong style="color:${e.A};">${escapeHtml(String(x.numero))}</strong> ` : ""}${escapeHtml(x.nome)}${x.pos ? ` <span style="color:${e.T.muted2};">${escapeHtml(x.pos)}</span>` : ""}</span>`;
+  const blocoSuplentes = (e, tam = 26) => suplentes.length ? `
+    <div style="width:100%; text-align:center;">
+      <div style="font-family:'Bebas Neue',sans-serif; font-size:40px; letter-spacing:.2em; color:${e.A}; margin-bottom:4px;">SUPLENTES</div>
+      <div>${suplentes.map(x => chipSup(x, e, tam)).join("")}</div>
+    </div>` : "";
+  const cabecalho = (e) => `
+    <div style="text-align:center;">
+      <div style="font-family:'Bebas Neue',sans-serif; font-size:${titulo.length > 22 ? 58 : 84}px; letter-spacing:.14em; color:${e.A}; line-height:1;">${escapeHtml(titulo)}</div>
+      <div style="font-size:34px; margin-top:6px; color:${e.T.muted2};">${escapeHtml(formacao)} · ${escapeHtml(periodo)}</div>
+    </div>`;
+  const nota = (v) => v == null ? "" : fmt1(v);
+
+  const modeloCampo = (e) => {
+    const alto = e.H > 1500 ? 1050 : 660;
+    const linhasHtml = linhas.map(l => `
+      <div style="display:flex; justify-content:space-around; position:relative; z-index:1;">
+        ${l.jogadores.map(j => `
+          <div style="width:${Math.floor(940 / Math.max(l.jogadores.length, 3))}px; text-align:center;">
+            <div style="width:62px; height:62px; border-radius:50%; background:#fff; color:#111; font-weight:700; font-size:28px; display:flex; align-items:center; justify-content:center; margin:0 auto 4px;">${escapeHtml(j.numero != null ? String(j.numero) : "•")}</div>
+            <div style="font-size:28px; font-weight:700; color:#fff; line-height:1.1; text-shadow:0 2px 4px rgba(0,0,0,.5);">${escapeHtml(j.nome)}</div>
+            <div style="font-size:21px; color:#ffe27a;">${escapeHtml(j.pos)}${j.nota != null ? ` · ${nota(j.nota)}` : ""}</div>
+          </div>`).join("")}
+      </div>`).join("");
+    return `<div style="${e.base}">${e.cantos}${e.topo}${cabecalho(e)}
+      <div style="width:100%; height:${alto}px; border-radius:28px; background:linear-gradient(180deg,#217f41,#14602e); border:4px solid rgba(255,255,255,.6); position:relative; display:flex; flex-direction:column; justify-content:space-around; padding:18px 8px; box-sizing:border-box;">
+        <div style="position:absolute; left:0; right:0; top:50%; height:3px; background:rgba(255,255,255,.4);"></div>
+        <div style="position:absolute; left:50%; top:50%; width:170px; height:170px; border:3px solid rgba(255,255,255,.4); border-radius:50%; transform:translate(-50%,-50%);"></div>
+        ${linhasHtml}
+      </div>
+      ${blocoSuplentes(e)}
+      ${e.rodape}</div>`;
+  };
+
+  const modeloLista = (e) => {
+    const lin = linhas.map(l => `
+      <div style="width:100%; display:flex; align-items:center; gap:24px; padding:16px 0; border-bottom:2px solid ${e.A}44;">
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:38px; letter-spacing:.12em; color:${e.A}; width:210px; flex-shrink:0;">${escapeHtml(l.label.toUpperCase())}</div>
+        <div style="flex:1; display:flex; flex-wrap:wrap; gap:6px 30px;">
+          ${l.jogadores.map(j => `<div><span style="font-family:'Bebas Neue',sans-serif; font-size:56px; line-height:1;">${escapeHtml(j.nome.toUpperCase())}</span> <span style="font-size:22px; color:${e.T.muted2};">${escapeHtml(j.pos)}${j.nota != null ? ` · ${nota(j.nota)}` : ""}</span></div>`).join("")}
+        </div>
+      </div>`).join("");
+    return `<div style="${e.base}">${e.cantos}${e.topo}${cabecalho(e)}
+      <div style="width:100%;">${lin}</div>
+      ${blocoSuplentes(e)}
+      ${e.rodape}</div>`;
+  };
+
+  const modeloCartoes = (e) => {
+    const lin = linhas.map(l => `
+      <div style="display:flex; justify-content:center; gap:16px; width:100%;">
+        ${l.jogadores.map(j => `
+          <div style="width:${Math.min(220, Math.floor(980 / l.jogadores.length) - 16)}px; border:3px solid ${e.A}; border-radius:18px; padding:12px 8px; text-align:center; box-sizing:border-box; background:rgba(255,255,255,.05);">
+            <div style="font-family:'Bebas Neue',sans-serif; font-size:54px; color:${e.A}; line-height:1;">${escapeHtml(j.numero != null ? String(j.numero) : "•")}</div>
+            <div style="font-size:30px; font-weight:700; line-height:1.1;">${escapeHtml(j.nome)}</div>
+            <div style="font-size:21px; color:${e.T.muted2};">${escapeHtml(j.pos)}${j.nota != null ? ` · ${nota(j.nota)}` : ""}</div>
+          </div>`).join("")}
+      </div>`).join("");
+    return `<div style="${e.base}">${e.cantos}${e.topo}${cabecalho(e)}
+      <div style="width:100%; display:flex; flex-direction:column; gap:${e.H > 1500 ? 34 : 16}px;">${lin}</div>
+      ${blocoSuplentes(e)}
+      ${e.rodape}</div>`;
+  };
+
+  const legenda = [`⚽ ${titulo} — ${formacao} (${periodo})`, "",
+    ...linhas.map(l => `${l.label}: ${l.jogadores.map(j => j.nome).join(", ")}`),
+    ...(suplentes.length ? ["", `Suplentes: ${suplentes.map(x => x.nome).join(", ")}`] : []),
+    "", "#bdc04\n#futeboldevarzea\n#somosbdc"].join("\n");
+
+  openImagemModal({
+    titulo: "Imagem da escalação",
+    arquivo: `escalacao-${formacao}`,
+    legenda,
+    selecao: { label: "Modelo", padrao: "campo", opcoes: [{ value: "campo", label: "Campo" }, { value: "lista", label: "Lista por setor" }, { value: "cartoes", label: "Cartões" }] },
+    render: (e) => e.selecaoId === "lista" ? modeloLista(e) : e.selecaoId === "cartoes" ? modeloCartoes(e) : modeloCampo(e),
+  });
+}
+
 
 export function renderEscalacaoIdeal(root, state){
   const realizados = jogosRealizados(state.jogos);
@@ -525,14 +611,31 @@ export function renderEscalacaoIdeal(root, state){
     });
   });
 
-  $("#btn-print-escalacao", root)?.addEventListener("click", async (e) => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    toast("Gerando imagem…", "ok");
-    try{
-      await compartilharImagemEscalacao(linhasHtml, formacaoAtual);
-    } finally {
-      btn.disabled = false;
-    }
+  $("#btn-print-escalacao", root)?.addEventListener("click", () => {
+    let cursor = 0;
+    const linhasImg = linhas.map(linha => {
+      const jogadores = [];
+      for (let i = 0; i < linha.slots.length; i++){
+        const id = ordem[cursor + i];
+        if (!id) continue;
+        const atleta = atletasConsiderados.find(a => a.id === id) || atletasElenco.find(a => a.id === id);
+        const info = criterio === "cadastro"
+          ? { posicaoJogada: atleta?.posicao || "", media: geral[id] ?? null }
+          : melhorParaLinha(id, { positions: linha.slots[i] }, notasPos, atletasConsiderados, jogosFiltrados);
+        jogadores.push({ nome: atleta?.nome || "?", numero: atleta?.numero ?? null, pos: abrevPosicao(info.posicaoJogada || ""), nota: info.media ?? null });
+      }
+      cursor += linha.slots.length;
+      return { label: linha.label, jogadores };
+    });
+    const titulares = new Set(ordem.filter(Boolean));
+    const suplentes = atletasConsiderados.filter(a => !titulares.has(a.id)).sort(porGeral).slice(0, 10)
+      .map(a => ({ nome: a.nome, numero: a.numero ?? null, pos: abrevPosicao(a.posicao || "") }));
+    abrirImagemEscalacao({
+      formacao: formacaoAtual,
+      titulo: soConfirmados && proximo ? `ESCALAÇÃO · VS ${advProx.toUpperCase()}` : "ESCALAÇÃO IDEAL",
+      periodo: periodoTxt,
+      linhas: linhasImg.filter(l => l.jogadores.length),
+      suplentes,
+    });
   });
 }
