@@ -571,3 +571,28 @@ th.col-ativa, td.col-ativa{ background:rgba(228,182,43,.16); font-weight:700; }
   .dash-stats .dash-stat{flex:0 0 150px; scroll-snap-align:start;}
   .dash-seq{text-align:left;}
 }
+
+/* Ranking: seletor em chips, pódio e filtros */
+.rank-chips{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;}
+.rank-chip{border:1px solid var(--line, rgba(128,128,128,.3)); background:var(--card, #fff); color:var(--ink); border-radius:999px; padding:8px 16px; font-size:13.5px; font-weight:600; cursor:pointer; font-family:inherit;}
+.rank-chip:hover{border-color:var(--gold);}
+.rank-chip.active{background:var(--gold); border-color:var(--gold); color:var(--gold-ink);}
+.rank-filtros{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:18px; max-width:760px;}
+.rank-filtros .field.span-2{grid-column:1 / -1;}
+.rank-podium{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; align-items:end; margin-bottom:20px;}
+.rank-pod{background:var(--card, #fff); border:1px solid var(--line, rgba(128,128,128,.25)); border-radius:14px; padding:14px 12px; text-align:center; cursor:pointer;}
+.rank-pod.p1{background:#14171C; color:#fff; border-color:var(--gold); padding-top:22px; padding-bottom:22px;}
+.rank-pod-pos{font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:.08em; color:var(--gold);}
+.rank-pod-name{font-weight:700; font-size:15px; margin:2px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.rank-pod-val{font-family:var(--font-mono); font-size:34px; font-weight:700; color:var(--gold); line-height:1.1;}
+.rank-pod.p1 .rank-pod-val{font-size:46px;}
+.rank-pod-unit{font-size:11px; letter-spacing:.08em; text-transform:uppercase; opacity:.7;}
+.rank-pod-sub{font-size:12px; opacity:.7; margin-top:4px; min-height:15px;}
+@media (max-width:700px){
+  .rank-pod{padding:10px 6px;}
+  .rank-pod-name{font-size:13px;}
+  .rank-pod-val{font-size:26px;}
+  .rank-pod.p1 .rank-pod-val{font-size:34px;}
+  .rank-chips{flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px;}
+  .rank-chip{flex:0 0 auto;}
+}

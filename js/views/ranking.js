@@ -1,5 +1,6 @@
-import { $, $$, escapeHtml, formatDate, fmt1, toast, reRenderKeepingFocus } from "../utils.js";
+import { $, $$, escapeHtml, formatDate, fmt1, reRenderKeepingFocus } from "../utils.js";
 import { statsPorAtleta, ehJogador } from "../stats.js";
+import { openImagemModal } from "./flyer.js";
 
 let activeMetric = "ga"; // jogos | gols | assistencias | ga | nota
 let filtroAno = "";
@@ -11,7 +12,7 @@ let filtroPartida = "";
 let votantesFiltro = [];
 
 const METRICAS = [
-  { key: "jogos", label: "Qtde. de jogos" },
+  { key: "jogos", label: "Jogos" },
   { key: "gols", label: "Gols" },
   { key: "assistencias", label: "Assistências" },
   { key: "ga", label: "G+A" },
@@ -45,65 +46,54 @@ function filtrarPorMetrica(lista, metrica){
   }
 }
 
-// Gera uma imagem (PNG) da tabela de ranking atual (já filtrada/ordenada) e
-// compartilha (Web Share API) ou baixa o arquivo — pra mandar rapidinho no
-// grupo do WhatsApp. Mesmo padrão usado no botão de compartilhar da Escalação ideal.
-async function compartilharImagemRanking(theadHtml, tbodyHtml, metricLabel, periodoLabel, votantesLabel){
-  if (typeof html2canvas !== "function"){
-    toast("Não foi possível gerar a imagem (recurso indisponível).", "err");
-    return;
-  }
-  const card = document.createElement("div");
-  card.style.cssText = "position:fixed; left:-9999px; top:0; width:640px; background:#fff; padding:22px; font-family:'Inter',system-ui,sans-serif;";
-  card.innerHTML = `
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
-      <img src="assets/logo-bomdcopus.png" crossorigin="anonymous" style="width:38px; height:38px; border-radius:50%; object-fit:cover;">
-      <div>
-        <div style="font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:.03em; color:#141414; line-height:1;">BOM D' COPUS</div>
-        <div style="font-size:11px; color:#5B6470; margin-top:2px;">Ranking — ${escapeHtml(metricLabel)} · ${escapeHtml(periodoLabel)}${votantesLabel ? ` · Nota de: ${escapeHtml(votantesLabel)}` : ""}</div>
-      </div>
-    </div>
-    <table style="width:100%; border-collapse:collapse;">
-      <thead>${theadHtml}</thead>
-      <tbody>${tbodyHtml}</tbody>
-    </table>
-  `;
-  document.body.appendChild(card);
+// Valor principal e legenda de cada métrica (usados no pódio e na imagem).
+const VALOR = {
+  jogos: { val: s => String(s.jogosCount), unid: "jogos" },
+  gols: { val: s => String(s.gols), unid: "gols" },
+  assistencias: { val: s => String(s.assistencias), unid: "assistências" },
+  ga: { val: s => String(s.gols + s.assistencias), unid: "gols + assist." },
+  nota: { val: s => fmt1(s.media), unid: "nota média" },
+};
 
-  try{
-    const canvas = await html2canvas(card, { backgroundColor: "#ffffff", scale: 2, windowWidth: 1000, useCORS: true });
-    card.remove();
+function detalhe(s){
+  return `${s.jogosCount} jogo${s.jogosCount === 1 ? "" : "s"} · ${s.gols} gol${s.gols === 1 ? "" : "s"} · ${s.assistencias} assist.`;
+}
 
-    canvas.toBlob(async (blob) => {
-      if (!blob){
-        toast("Não foi possível gerar a imagem.", "err");
-        return;
-      }
-      const file = new File([blob], `ranking-${metricLabel}.png`, { type: "image/png" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })){
-        try{
-          await navigator.share({ files: [file], title: "Ranking", text: `Ranking — Bom D' Copus (${metricLabel})` });
-          return;
-        }catch(err){
-          if (err?.name === "AbortError") return; // usuário cancelou o compartilhamento
-          console.error(err);
-        }
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `ranking-${metricLabel}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast("Imagem salva!", "ok");
-    }, "image/png");
-  }catch(err){
-    card.remove();
-    console.error(err);
-    toast("Erro ao gerar a imagem: " + err.message, "err");
-  }
+function abrirImagemRanking(top5, metricLabel, periodoLabel, votantesLabel, metrica){
+  const medalhas = ["1º", "2º", "3º", "4º", "5º"];
+  const v = VALOR[metrica];
+  const legenda = [`🏆 Ranking — ${metricLabel} (${periodoLabel})`, "",
+    ...top5.map((s, i) => `${["🥇", "🥈", "🥉", "4️⃣", "5️⃣"][i]} ${s.atleta.nome} — ${v.val(s)} ${v.unid}`),
+    "", "#bdc04\n#futeboldevarzea\n#somosbdc"].join("\n");
+  openImagemModal({
+    titulo: "Imagem do ranking",
+    arquivo: `ranking-${metrica}`,
+    legenda,
+    render: (e) => {
+      const pad = e.H > 1500 ? 30 : 16;
+      const linhas = top5.map((s, i) => `
+        <div style="display:flex; align-items:center; gap:22px; width:100%; padding:${pad}px ${i === 0 ? 18 : 0}px; border-bottom:2px solid ${e.A}44; ${i === 0 ? `background:${e.A}22; border-radius:20px;` : ""}">
+          <div style="font-family:'Bebas Neue',sans-serif; font-size:${i === 0 ? 84 : 66}px; color:${e.A}; width:100px; text-align:center; line-height:1;">${medalhas[i]}</div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-family:'Bebas Neue',sans-serif; font-size:${i === 0 ? 78 : 62}px; line-height:1.05; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(s.atleta.nome.toUpperCase())}</div>
+            <div style="font-size:26px; color:${e.T.muted2};">${escapeHtml(detalhe(s))}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-family:'Bebas Neue',sans-serif; font-size:${i === 0 ? 100 : 78}px; line-height:1; color:${e.A};">${escapeHtml(v.val(s))}</div>
+            <div style="font-size:22px; color:${e.T.muted2};">${escapeHtml(v.unid)}</div>
+          </div>
+        </div>`).join("");
+      return `<div style="${e.base}">${e.cantos}${e.topo}
+        <div style="text-align:center;">
+          <div style="font-family:'Bebas Neue',sans-serif; font-size:92px; letter-spacing:.14em; color:${e.A}; line-height:1;">RANKING</div>
+          <div style="font-size:40px; margin-top:6px;">${escapeHtml(metricLabel.toUpperCase())} · TOP 5</div>
+          <div style="font-size:28px; color:${e.T.muted2}; margin-top:6px;">${escapeHtml(periodoLabel)}${votantesLabel ? ` · Nota de: ${escapeHtml(votantesLabel)}` : ""}</div>
+        </div>
+        <div style="width:100%;">${linhas}</div>
+        ${e.rodape}
+      </div>`;
+    },
+  });
 }
 
 export function renderRanking(root, state){
@@ -139,13 +129,16 @@ export function renderRanking(root, state){
   const stats = statsPorAtleta(state.atletas.filter(ehJogador), jogosFiltrados, votanteIds);
   const listaFinal = ordenarPorMetrica(filtrarPorMetrica(stats, activeMetric), activeMetric);
 
+  const top3 = listaFinal.slice(0, 3);
+  const resto = listaFinal.slice(3);
+  const v = VALOR[activeMetric];
   // Coluna da métrica selecionada fica levemente destacada (cabeçalho + células).
   const hl = (k) => activeMetric === k ? ` class="col-ativa"` : "";
   const hlNum = (k) => activeMetric === k ? "pill-num col-ativa" : "pill-num";
   const theadRowHtml = `<tr><th>#</th><th>Atleta</th><th>Posição</th><th${hl("jogos")}>Jogos</th><th${hl("gols")}>Gols</th><th${hl("assistencias")}>Assist.</th><th${hl("ga")}>G+A</th><th${hl("nota")}>Nota média</th></tr>`;
-  const rows = listaFinal.map((s, i) => `
+  const rows = resto.map((s, i) => `
     <tr>
-      <td class="pill-num">${i + 1}º</td>
+      <td class="pill-num">${i + 4}º</td>
       <td><strong class="atleta-link" data-atleta="${s.atleta.id}" title="Ver extrato">${escapeHtml(s.atleta.nome)}</strong></td>
       <td>${escapeHtml(s.atleta.posicao || "—")}</td>
       <td class="${hlNum("jogos")}">${s.jogosCount}</td>
@@ -154,6 +147,15 @@ export function renderRanking(root, state){
       <td class="${hlNum("ga")}">${s.gols + s.assistencias}</td>
       <td${hl("nota")}>${fmt1(s.media)}</td>
     </tr>`).join("");
+
+  const pod = (s, i) => `
+    <div class="rank-pod p${i + 1}" data-atleta="${s.atleta.id}" title="Ver extrato">
+      <div class="rank-pod-pos">${i + 1}º</div>
+      <div class="rank-pod-name">${escapeHtml(s.atleta.nome)}</div>
+      <div class="rank-pod-val">${escapeHtml(v.val(s))}</div>
+      <div class="rank-pod-unit">${escapeHtml(v.unid)}</div>
+      <div class="rank-pod-sub">${escapeHtml(s.atleta.posicao || "")}</div>
+    </div>`;
 
   root.innerHTML = `
     <div class="topbar">
@@ -166,11 +168,11 @@ export function renderRanking(root, state){
       </button>
     </div>
 
-    <div class="tabbar">
-      ${METRICAS.map(m => `<button class="tab-btn" data-metric="${m.key}">${escapeHtml(m.label)}</button>`).join("")}
+    <div class="rank-chips">
+      ${METRICAS.map(m => `<button class="rank-chip ${m.key === activeMetric ? "active" : ""}" data-metric="${m.key}" type="button">${escapeHtml(m.label)}</button>`).join("")}
     </div>
 
-    <div class="form-grid" style="margin-bottom:20px; max-width:680px;">
+    <div class="rank-filtros">
       <div class="field">
         <label>Ano</label>
         <select id="filtro-ano" ${filtroPartida ? "disabled" : ""}>
@@ -208,16 +210,18 @@ export function renderRanking(root, state){
       </div>
     ` : ""}
 
+    ${top3.length === 0 ? `<div class="empty-state"><h3>Sem dados</h3><p>Nenhum dado para os filtros selecionados.</p></div>` : `
+    <div class="rank-podium">${[1, 0, 2].filter(i => top3[i]).map(i => pod(top3[i], i)).join("")}</div>
+    ${resto.length ? `
     <div class="table-wrap">
       <table>
         <thead>${theadRowHtml}</thead>
-        <tbody>${rows || `<tr class="empty-row"><td colspan="8">Nenhum dado para os filtros selecionados.</td></tr>`}</tbody>
+        <tbody>${rows}</tbody>
       </table>
-    </div>
+    </div>` : ""}`}
   `;
 
-  $$(".tab-btn", root).forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.metric === activeMetric);
+  $$(".rank-chip", root).forEach(btn => {
     btn.addEventListener("click", () => {
       activeMetric = btn.dataset.metric;
       reRenderKeepingFocus(root, () => renderRanking(root, state));
@@ -228,6 +232,7 @@ export function renderRanking(root, state){
   $("#filtro-mes", root)?.addEventListener("change", (e) => { filtroMes = e.target.value; reRenderKeepingFocus(root, () => renderRanking(root, state)); });
   $("#filtro-partida", root)?.addEventListener("change", (e) => { filtroPartida = e.target.value; reRenderKeepingFocus(root, () => renderRanking(root, state)); });
 
+  $$(".rank-pod", root).forEach(el => el.addEventListener("click", () => { location.hash = `#extrato/${el.dataset.atleta}`; }));
   $$(".atleta-link", root).forEach(el => {
     el.addEventListener("click", () => { location.hash = `#extrato/${el.dataset.atleta}`; });
   });
@@ -240,22 +245,15 @@ export function renderRanking(root, state){
     });
   });
 
-  $("#btn-print-ranking", root)?.addEventListener("click", async (e) => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    toast("Gerando imagem…", "ok");
-    try{
-      const periodoLabel = filtroPartida
-        ? (() => {
-            const j = realizados.find(x => x.id === filtroPartida);
-            return j ? `${formatDate(j.data)} vs ${nomeAdv(j.adversarioId)}` : "Partida específica";
-          })()
-        : [filtroMes ? MESES[Number(filtroMes) - 1] : null, filtroAno].filter(Boolean).join("/") || "Todos os períodos";
-      const metricLabel = METRICAS.find(m => m.key === activeMetric)?.label || "Ranking";
-      const votantesLabel = votanteIds ? votantes.filter(v => votanteIds.includes(v.id)).map(v => v.nome).join(", ") : "";
-      await compartilharImagemRanking(theadRowHtml, rows || `<tr><td colspan="8" style="text-align:center; color:#999; padding:20px;">Nenhum dado para os filtros selecionados.</td></tr>`, metricLabel, periodoLabel, votantesLabel);
-    } finally {
-      btn.disabled = false;
-    }
+  $("#btn-print-ranking", root)?.addEventListener("click", () => {
+    const periodoLabel = filtroPartida
+      ? (() => {
+          const j = realizados.find(x => x.id === filtroPartida);
+          return j ? `${formatDate(j.data)} vs ${nomeAdv(j.adversarioId)}` : "Partida específica";
+        })()
+      : [filtroMes ? MESES[Number(filtroMes) - 1] : null, filtroAno].filter(Boolean).join("/") || "Todos os períodos";
+    const metricLabel = METRICAS.find(m => m.key === activeMetric)?.label || "Ranking";
+    const votantesLabel = votanteIds ? votantes.filter(x => votanteIds.includes(x.id)).map(x => x.nome).join(", ") : "";
+    abrirImagemRanking(listaFinal.slice(0, 5), metricLabel, periodoLabel, votantesLabel, activeMetric);
   });
 }
